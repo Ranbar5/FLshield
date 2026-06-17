@@ -292,12 +292,28 @@ if not os.path.exists(APKS_DIR):
 
 def load_config() -> dict:
     cfg = db.get_config()
+    default_allowed_apps = [
+        "com.motorola.camera3",
+        "com.google.android.calculator",
+        "com.whatsapp",
+        "com.waze",
+        "com.microsoft.powerbim",
+        "com.microsoft.teams",
+        "com.ionicframework.sfaLucema",
+        "com.whatsapp.w4b",
+        "com.google.android.apps.messaging",
+        "com.google.android.deskclock",
+        "com.document.pdf.scanner.free.all",
+        "com.google.android.dialer",
+        "com.google.android.apps.maps",
+        "com.google.android.contacts"
+    ]
     if cfg is None:
         cfg = {
             "master_password": "1234",
-            "allowed_apps": [],
+            "allowed_apps": default_allowed_apps,
             "block_gps": False,
-            "block_datetime": True,
+            "block_datetime": False,
             "device_names": {},
             "always_blocked": ["com.android.settings", "com.android.providers.settings"],
             "always_allowed": ["com.example.applocker", "com.android.systemui", "com.android.launcher", "com.google.android.apps.nexuslauncher"],
