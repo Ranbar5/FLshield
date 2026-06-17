@@ -13,14 +13,40 @@ import requests
 
 app = FastAPI()
 
+ADMIN_USER = "FLAdmin"
+ADMIN_PASS = "TNm5VqCferU6hKtW32upxWOae"
+active_sessions = set()
+
+
 @app.middleware("http")
-async def add_cache_control_header(request: Request, call_next):
+async def auth_and_cache_middleware(request: Request, call_next):
+    path = request.url.path
+    
+    # Protect all /api/ endpoints EXCEPT /api/provision, /api/enrollment-config, /api/auth/login, /api/auth/status
+    public_paths = {
+        "/api/provision",
+        "/api/enrollment-config",
+        "/api/auth/login",
+        "/api/auth/status"
+    }
+    
+    if path.startswith("/api/") and path not in public_paths:
+        session_token = request.cookies.get("flshield_session")
+        if not session_token or session_token not in active_sessions:
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Not authenticated"}
+            )
+            
     response = await call_next(request)
-    if request.url.path.startswith("/api/"):
+    
+    if path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
+        
     return response
+
 
 CONFIG_FILE = "config.json"
 DEVICES_FILE = "devices.json"
@@ -1339,7 +1365,44 @@ async def start_adb_provision(req: AdbProvisionRequest, background_tasks: Backgr
     )
     return {"success": True}
 
+# ─── Authentication endpoints ──────────────────────────────────────────────────
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+@app.post("/api/auth/login")
+async def login(credentials: LoginRequest):
+    if credentials.username == ADMIN_USER and credentials.password == ADMIN_PASS:
+        session_token = secrets.token_hex(32)
+        active_sessions.add(session_token)
+        response = JSONResponse(content={"success": True, "message": "Login successful"})
+        response.set_cookie(
+            key="flshield_session",
+            value=session_token,
+            httponly=True,
+            max_age=30 * 24 * 3600,
+            samesite="lax",
+            secure=False
+        )
+        return response
+    return JSONResponse(status_code=400, content={"success": False, "message": "Usuario o contraseña incorrectos"})
+
+@app.get("/api/auth/status")
+async def auth_status(request: Request):
+    session_token = request.cookies.get("flshield_session")
+    if session_token and session_token in active_sessions:
+        return {"authenticated": True, "user": ADMIN_USER}
+    return {"authenticated": False}
+
+@app.post("/api/auth/logout")
+async def logout():
+    response = JSONResponse(content={"success": True, "message": "Logged out"})
+    response.delete_cookie(key="flshield_session")
+    return response
+
 # ─── Static files (web dashboard) ────────────────────────────────────────────
+
 
 app.mount("/", StaticFiles(directory="public", html=True), name="static")
 

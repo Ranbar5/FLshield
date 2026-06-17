@@ -232,9 +232,141 @@
         #toast.show { opacity: 1; transform: translateY(0); }
         #toast.ok { border-left: 3px solid var(--success); }
         #toast.err { border-left: 3px solid var(--danger); }
+
+        /* Login Overlay */
+        #login-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            background: rgba(10, 10, 12, 0.96);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+        .login-card {
+            background: rgba(20, 20, 25, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 40px;
+            border-radius: 20px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+            text-align: center;
+            animation: fadeIn 0.4s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .login-logo {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 8px;
+            letter-spacing: -0.02em;
+        }
+        .login-logo span {
+            color: var(--primary);
+            background: linear-gradient(135deg, #a78bfa, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .login-subtitle {
+            color: var(--muted);
+            font-size: 0.88rem;
+            margin-bottom: 32px;
+        }
+        .login-form-group {
+            text-align: left;
+            margin-bottom: 20px;
+        }
+        .login-label {
+            display: block;
+            color: #d1d5db;
+            font-size: 0.75rem;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+        .login-input {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            color: #fff;
+            font-size: 0.9rem;
+            outline: none;
+            transition: all 0.3s;
+        }
+        .login-input:focus {
+            border-color: var(--primary);
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+        }
+        .login-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #6366f1, #3b82f6);
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 8px;
+        }
+        .login-btn:hover {
+            opacity: 0.95;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+        .login-error {
+            color: #ef4444;
+            font-size: 0.8rem;
+            text-align: left;
+            margin-bottom: 16px;
+            display: none;
+            animation: shake 0.3s;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-4px); }
+            75% { transform: translateX(4px); }
+        }
     </style>
 </head>
 <body>
+
+<!-- Login Overlay -->
+<div id="login-overlay" style="display: none;">
+    <div class="login-card">
+        <div class="login-logo">FL<span>Shield</span></div>
+        <p class="login-subtitle">Inicia sesión para acceder al panel de control</p>
+        
+        <form id="login-form" onsubmit="handleLogin(event)">
+            <div class="login-form-group">
+                <label class="login-label">Usuario</label>
+                <input type="text" id="login-username" class="login-input" autocomplete="username" required>
+            </div>
+            
+            <div class="login-form-group">
+                <label class="login-label">Contraseña</label>
+                <input type="password" id="login-password" class="login-input" autocomplete="current-password" required>
+            </div>
+            
+            <div id="login-error" class="login-error">Usuario o contraseña incorrectos</div>
+            
+            <button type="submit" class="login-btn">Iniciar Sesión</button>
+        </form>
+    </div>
+</div>
+
 <div class="layout">
 
     <!-- Sidebar -->
@@ -243,7 +375,7 @@
             <h1>FL<span>Shield</span></h1>
             <p>Centro de Control v3</p>
         </div>
-        <nav>
+        <nav style="display: flex; flex-direction: column; height: calc(100% - 80px);">
             <div class="nav-item active" onclick="navigate('devices', this)">
                 <span class="icon">📱</span> Dispositivos
             </div>
@@ -261,6 +393,10 @@
             </div>
             <div class="nav-item" onclick="navigate('adb', this)">
                 <span class="icon">⚡</span> Instalador ADB
+            </div>
+            
+            <div class="nav-item" onclick="handleLogout()" style="margin-top: auto; color: var(--danger); border-top: 1px solid rgba(255,255,255,0.05); padding-top: 16px;">
+                <span class="icon">🚪</span> Cerrar Sesión
             </div>
         </nav>
         <div class="server-badge" id="server-badge">
@@ -664,6 +800,102 @@
 </div>
 
 <script>
+    // ── Authentication logic ──────────────────────────────────────────────────
+    let isAuthenticated = false;
+
+    function showLogin() {
+        document.getElementById('login-overlay').style.display = 'flex';
+        const layout = document.querySelector('.layout');
+        if (layout) layout.style.display = 'none';
+        isAuthenticated = false;
+    }
+
+    function showApp() {
+        document.getElementById('login-overlay').style.display = 'none';
+        const layout = document.querySelector('.layout');
+        if (layout) layout.style.display = 'flex';
+        isAuthenticated = true;
+    }
+
+    // Intercept all fetch requests globally
+    const originalFetch = window.fetch;
+    window.fetch = async function(resource, init) {
+        const response = await originalFetch(resource, init);
+        // If unauthorized and not auth endpoints, trigger login overlay
+        const isString = typeof resource === 'string';
+        const urlStr = isString ? resource : (resource.url || '');
+        if (response.status === 401 && !urlStr.includes('/api/auth/status') && !urlStr.includes('/api/auth/login')) {
+            showLogin();
+        }
+        return response;
+    };
+
+    async function checkAuthStatus() {
+        try {
+            const res = await originalFetch(`/api/auth/status?_=${Date.now()}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.authenticated) {
+                    showApp();
+                    loadConfig();
+                    loadDevices();
+                    return true;
+                }
+            }
+        } catch (e) {
+            console.error("Auth status check failed:", e);
+        }
+        showLogin();
+        return false;
+    }
+
+    async function handleLogin(event) {
+        event.preventDefault();
+        const usernameEl = document.getElementById('login-username');
+        const passwordEl = document.getElementById('login-password');
+        const errorEl = document.getElementById('login-error');
+        
+        errorEl.style.display = 'none';
+        
+        try {
+            const res = await originalFetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username: usernameEl.value.trim(),
+                    password: passwordEl.value
+                })
+            });
+            
+            if (res.ok) {
+                showApp();
+                loadConfig();
+                loadDevices();
+                passwordEl.value = '';
+                usernameEl.value = '';
+            } else {
+                errorEl.style.display = 'block';
+                // Trigger shake animation
+                const card = document.querySelector('.login-card');
+                card.style.animation = 'none';
+                card.offsetHeight; // trigger reflow
+                card.style.animation = null;
+            }
+        } catch (e) {
+            errorEl.textContent = 'Error de conexión con el servidor';
+            errorEl.style.display = 'block';
+        }
+    }
+
+    async function handleLogout() {
+        try {
+            await originalFetch('/api/auth/logout', { method: 'POST' });
+        } catch (e) {
+            console.error("Logout failed:", e);
+        }
+        showLogin();
+    }
+
     let currentApps = [];
     let qrGenerator = null;
 
@@ -773,6 +1005,7 @@
     // ── Devices & unlock requests ─────────────────────────────────────────────
 
     async function loadDevices() {
+        if (!isAuthenticated) return;
         try {
             const res = await fetch(`/api/devices?_=${Date.now()}`);
             const data = await res.json();
@@ -1045,6 +1278,7 @@
     // ── Whitelist ─────────────────────────────────────────────────────────────
 
     async function loadConfig() {
+        if (!isAuthenticated) return;
         const res = await fetch(`/api/config?_=${Date.now()}`);
         const data = await res.json();
         currentApps = data.allowed_apps || [];
@@ -1583,11 +1817,9 @@
         }
     }
 
-    // ── Init ──────────────────────────────────────────────────────────────────
-
-    loadConfig();
-    loadDevices();
+    checkAuthStatus();
     setInterval(loadDevices, 5000); // Reduced from 3s to 5s
+
 
     document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('pkg-input')?.addEventListener('keydown', e => {
