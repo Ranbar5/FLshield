@@ -59,6 +59,7 @@ class AppLockService : Service() {
     private val http = OkHttpClient.Builder()
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .connectTimeout(10, TimeUnit.SECONDS)
+        .pingInterval(15, TimeUnit.SECONDS)
         .build()
 
     private val mainHandler = Handler(Looper.getMainLooper())
