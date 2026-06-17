@@ -362,14 +362,23 @@ def find_device_record(device_id: str, db: Optional[dict] = None) -> Optional[di
     return None
 
 
+KNOWN_DEVICE_NAMES = {
+    "moto_g54_5G_0cfccfab23d61ff5": "C1",
+    "moto_g54_5G_094e6c4f5e7b83b4": "C2"
+}
+
 def register_device(device_id: str, device_key: Optional[str] = None, name: str = "", installed_apps: Optional[list] = None) -> dict:
     db = load_devices_db()
     device = find_device_record(device_id, db)
+    
+    fallback_name = KNOWN_DEVICE_NAMES.get(device_id, "")
+    resolved_name = name or fallback_name
+
     if device is None:
         device = {
             "device_id": device_id,
             "device_key": device_key or secrets.token_urlsafe(24),
-            "name": name or "",
+            "name": resolved_name,
             "created_at": time.time(),
             "last_seen": time.time(),
             "last_unlock_request_at": None,
@@ -383,8 +392,12 @@ def register_device(device_id: str, device_key: Optional[str] = None, name: str 
                 device["device_key"] = device_key
             elif device.get("device_key") != device_key:
                 print(f"⚠️ Device key mismatch for {device_id}; keeping existing key")
+        
         if name:
             device["name"] = name
+        elif not device.get("name") and fallback_name:
+            device["name"] = fallback_name
+            
         device["last_seen"] = time.time()
         if "blocked" not in device:
             device["blocked"] = False
@@ -392,6 +405,7 @@ def register_device(device_id: str, device_key: Optional[str] = None, name: str 
             device["installed_apps"] = installed_apps
     save_devices_db(db)
     return device
+
 
 import re
 import subprocess
