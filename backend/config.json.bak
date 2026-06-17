@@ -1,0 +1,17 @@
+{
+  "master_password": "1234",
+  "allowed_apps": [
+    "com.android.chrome",
+    "com.motorola.camera3",
+    "com.google.android.calculator",
+    "com.whatsapp",
+    "com.waze",
+    "com.microsoft.powerbim",
+    "com.microsoft.teams",
+    "com.ionicframework.sfaLucema"
+  ],
+  "block_gps": false,
+  "block_datetime": true,
+  "device_names": {},
+  "clear_data_password": "5678"
+}

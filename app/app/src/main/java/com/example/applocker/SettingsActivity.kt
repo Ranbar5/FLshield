@@ -35,17 +35,17 @@ class SettingsActivity : ComponentActivity() {
             AppLockerTheme {
                 SettingsScreen(
                     prefs = prefs,
-                    onSave = { serverUrl ->
-    prefs.serverUrl = serverUrl
-    prefs.fontSizeSp = fontSize
-    // Restart WebSocket connection
-    stopService(Intent(this, AppLockService::class.java))
-    Thread.sleep(500)
-    startService(Intent(this, AppLockService::class.java).apply {
-        action = AppLockService.ACTION_START
-    })
-    finish()
-},
+                    onSave = { serverUrl, fontSize ->
+                        prefs.serverUrl = serverUrl
+                        prefs.fontSizeSp = fontSize.toInt()
+                        // Restart WebSocket connection
+                        stopService(Intent(this, AppLockService::class.java))
+                        Thread.sleep(500)
+                        startService(Intent(this, AppLockService::class.java).apply {
+                            action = AppLockService.ACTION_START
+                        })
+                        finish()
+                    },
                     onCancel = { finish() }
                 )
             }
@@ -56,11 +56,11 @@ class SettingsActivity : ComponentActivity() {
 @Composable
 fun SettingsScreen(
     prefs: AppLockPreferences,
-    onSave: (String) -> Unit,
+    onSave: (String, Float) -> Unit,
     onCancel: () -> Unit
 ) {
     var serverUrl by remember { mutableStateOf(prefs.serverUrl ?: "") }
-    var fontSize by remember { mutableStateOf(prefs.fontSizeSp) }
+    var fontSize by remember { mutableStateOf(prefs.fontSizeSp.toFloat()) }
     var error by remember { mutableStateOf("") }
     var infoMessage by remember { mutableStateOf("") }
     var newLocalPassword by remember { mutableStateOf("") }
@@ -128,29 +128,45 @@ fun SettingsScreen(
 
                 if (error.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(10.dp))
-if (error.isNotEmpty()) {
-    Spacer(modifier = Modifier.height(10.dp))
-    Text(error, fontSize = 12.sp, color = Color(0xFFEF4444))
-}
+                    Text(error, fontSize = 12.sp, color = Color(0xFFEF4444))
+                }
 
-// Font size setting
-Text(
-    "Tamaño de letra",
-    fontSize = 12.sp,
-    color = Color(0xFF64748B),
-    fontWeight = FontWeight.Medium
-)
-Spacer(modifier = Modifier.height(8.dp))
-Slider(
-    value = fontSize,
-    onValueChange = { fontSize = it },
-    valueRange = 10f..30f,
-    steps = 20,
-    modifier = Modifier.fillMaxWidth()
-)
-Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
-Spacer(modifier = Modifier.height(28.dp))
+                // Font size setting
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Tamaño de letra",
+                        fontSize = 12.sp,
+                        color = Color(0xFF64748B),
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        "${fontSize.toInt()} sp",
+                        fontSize = 12.sp,
+                        color = Color(0xFF6366F1),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Slider(
+                    value = fontSize,
+                    onValueChange = { fontSize = it },
+                    valueRange = 10f..30f,
+                    steps = 19,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = SliderDefaults.colors(
+                        thumbColor = Color(0xFF6366F1),
+                        activeTrackColor = Color(0xFF6366F1),
+                        inactiveTrackColor = Color(0xFF1E293B)
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(28.dp))
 
                 Text(
                     "PIN local del dispositivo",
@@ -317,7 +333,7 @@ Spacer(modifier = Modifier.height(28.dp))
                             } else if (!trimmed.startsWith("http")) {
                                 error = "La URL debe comenzar con http:// o https://"
                             } else {
-                                onSave(trimmed)
+                                onSave(trimmed, fontSize)
                             }
                         },
                         modifier = Modifier

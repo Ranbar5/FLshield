@@ -662,7 +662,9 @@ class AppLockService : Service() {
             .setContentText("Dispositivo protegido")
             .setSmallIcon(android.R.drawable.ic_secure)
             .setContentIntent(pi)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setSilent(true)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .setOngoing(true)
             .build()
 
@@ -676,7 +678,13 @@ class AppLockService : Service() {
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val ch = NotificationChannel(CHANNEL_ID, "FLShield Service",
-                NotificationManager.IMPORTANCE_LOW)
+                NotificationManager.IMPORTANCE_MIN).apply {
+                setSound(null, null)
+                enableVibration(false)
+                enableLights(false)
+                setShowBadge(false)
+                description = "Servicio de protección en segundo plano"
+            }
             getSystemService(NotificationManager::class.java)?.createNotificationChannel(ch)
         }
     }

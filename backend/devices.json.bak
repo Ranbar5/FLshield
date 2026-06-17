@@ -1,0 +1,684 @@
+{
+  "devices": [
+    {
+      "device_id": "moto_g54_5G_0cfccfab23d61ff5",
+      "device_key": "XMWpUJod86V3ncIKv3p7SP9MBV3sVrV9",
+      "name": "C1",
+      "created_at": 1781640612.62232,
+      "last_seen": 1781645227.926574,
+      "last_unlock_request_at": null,
+      "blocked": true,
+      "installed_apps": [
+        {
+          "packageName": "com.google.android.apps.subscriptions.red",
+          "label": "Google One",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.whatsapp.w4b",
+          "label": "WhatsApp Business",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.google.android.youtube",
+          "label": "YouTube",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.googlequicksearchbox",
+          "label": "Google",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.apps.googleassistant",
+          "label": "Asistente",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.apps.docs.editors.docs",
+          "label": "Documentos",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.vitastudio.mahjong",
+          "label": "Vita Mahjong",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.king.candycrushsodasaga",
+          "label": "Candy Crush Soda",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.google.android.apps.docs.editors.sheets",
+          "label": "Hojas de cálculo",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.google.android.apps.docs.editors.slides",
+          "label": "Diapositivas",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.google.android.apps.messaging",
+          "label": "Mensajes",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.ionicframework.sfaLucema",
+          "label": "SFA Lucema",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.motorola.spaces",
+          "label": "Family Space",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.example.applocker",
+          "label": "FLShield",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.motorola.camera3",
+          "label": "Cámara",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.motorola.ccc.notification",
+          "label": "Notificaciones de Motorola",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.apps.safetyhub",
+          "label": "Seguridad personal",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.android.vending",
+          "label": "Google Play Store",
+          "isSystem": true
+        },
+        {
+          "packageName": "us.zoom.videomeetings",
+          "label": "Zoom",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.motorola.mobiledesktop",
+          "label": "Smart Connect",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.motorola.securityhub",
+          "label": "Moto Secure",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.waze",
+          "label": "Waze",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.motorola.dolby.dolbyui",
+          "label": "Dolby Atmos",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.deskclock",
+          "label": "Reloj",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.document.pdf.scanner.free.all",
+          "label": "Lector de PDF",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.google.android.gm",
+          "label": "Gmail",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.apps.tachyon",
+          "label": "Meet",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.aurora.store",
+          "label": "Aurora Store",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.google.android.dialer",
+          "label": "Teléfono",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.oakever.arrows",
+          "label": "Amaze GO!",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.google.android.apps.nbu.files",
+          "label": "Files de Google",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.adobe.scan.android",
+          "label": "Adobe Scan",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.google.android.apps.docs",
+          "label": "Drive",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.apps.maps",
+          "label": "Maps",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.contacts",
+          "label": "Contactos",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.apps.fitness",
+          "label": "Fit",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.google.android.calculator",
+          "label": "Calculadora",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.android.chrome",
+          "label": "Chrome",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.packageinstaller",
+          "label": "Instalador de paquetes",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.gms",
+          "label": "Servicios de Google Play",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.apps.walletnfcrel",
+          "label": "Billetera de Google",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.motorola.genie",
+          "label": "Ayuda del dispositivo",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.videos",
+          "label": "Google TV",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.zhiliaoapp.musically",
+          "label": "TikTok",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.google.android.apps.photos",
+          "label": "Fotos",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.calendar",
+          "label": "Calendario",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.motorola.gamemode",
+          "label": "Juegos",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.accessibility.switchaccess",
+          "label": "Accesibilidad con interruptores",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.motorola.help",
+          "label": "Comentarios sobre Moto",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.motorola.moto",
+          "label": "Moto",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.facebook.katana",
+          "label": "Facebook",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.motorola.audiorecorder",
+          "label": "Grabadora",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.motorola.fmplayer",
+          "label": "Radio FM",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.adobe.reader",
+          "label": "Adobe Acrobat",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.linkedin.android",
+          "label": "LinkedIn",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.android.settings",
+          "label": "Ajustes",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.apps.chromecast.app",
+          "label": "Home",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.motorola.launcher3",
+          "label": "Moto App Launcher",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.motorola.actions",
+          "label": "Acciones Moto y Gestos",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.einnovation.temu",
+          "label": "Temu",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.android.phone",
+          "label": "Servicios telefónicos",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.microsoft.powerbim",
+          "label": "Power BI",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.king.candycrushsaga",
+          "label": "Candy Crush Saga",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.ecffri.arrows",
+          "label": "Arrows",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.android.systemui",
+          "label": "IU del sistema",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.apps.youtube.music",
+          "label": "YouTube Music",
+          "isSystem": true
+        },
+        {
+          "packageName": "in.playsimple.newwordsearch",
+          "label": "2025 Word Search",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.inmobi.weather",
+          "label": "Weather",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.android.traceur",
+          "label": "Registro del sistema",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.apps.magazines",
+          "label": "Google Noticias",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.google.android.apps.adm",
+          "label": "Localizador",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.microsoft.teams",
+          "label": "Teams",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.google.android.inputmethod.latin",
+          "label": "Gboard",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.apps.restore",
+          "label": "Android Switch",
+          "isSystem": true
+        }
+      ],
+      "allowed_apps": [
+        "com.android.chrome",
+        "com.motorola.camera3",
+        "com.google.android.calculator",
+        "com.whatsapp",
+        "com.waze",
+        "com.microsoft.powerbim",
+        "com.microsoft.teams",
+        "com.ionicframework.sfaLucema",
+        "com.whatsapp.w4b",
+        "com.google.android.apps.messaging",
+        "com.google.android.deskclock",
+        "com.document.pdf.scanner.free.all",
+        "com.google.android.dialer",
+        "com.google.android.apps.maps",
+        "com.google.android.contacts"
+      ]
+    },
+    {
+      "device_id": "moto_g54_5G_094e6c4f5e7b83b4",
+      "device_key": "e1j3IdZ9s66a8WGy30cMlKxuIZvCWyeg",
+      "name": "C2",
+      "created_at": 1781645200.1943018,
+      "last_seen": 1781645299.8797822,
+      "last_unlock_request_at": null,
+      "blocked": false,
+      "installed_apps": [
+        {
+          "packageName": "com.google.android.apps.subscriptions.red",
+          "label": "Google One",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.youtube",
+          "label": "YouTube",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.googlequicksearchbox",
+          "label": "Google",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.apps.googleassistant",
+          "label": "Asistente",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.apps.messaging",
+          "label": "Mensajes",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.ionicframework.sfaLucema",
+          "label": "SFA Lucema",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.motorola.spaces",
+          "label": "Family Space",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.example.applocker",
+          "label": "FLShield",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.motorola.camera3",
+          "label": "Cámara",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.motorola.ccc.notification",
+          "label": "Notificaciones de Motorola",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.apps.safetyhub",
+          "label": "Seguridad personal",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.android.vending",
+          "label": "Google Play Store",
+          "isSystem": true
+        },
+        {
+          "packageName": "us.zoom.videomeetings",
+          "label": "Zoom",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.motorola.securityhub",
+          "label": "Moto Secure",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.motorola.dolby.dolbyui",
+          "label": "Dolby Atmos",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.motorola.timeweatherwidget",
+          "label": "Widget Moto",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.deskclock",
+          "label": "Reloj",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.gm",
+          "label": "Gmail",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.apps.tachyon",
+          "label": "Meet",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.dialer",
+          "label": "Teléfono",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.apps.nbu.files",
+          "label": "Files de Google",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.apps.docs",
+          "label": "Drive",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.apps.maps",
+          "label": "Maps",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.contacts",
+          "label": "Contactos",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.calculator",
+          "label": "Calculadora",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.android.chrome",
+          "label": "Chrome",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.packageinstaller",
+          "label": "Instalador de paquetes",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.gms",
+          "label": "Servicios de Google Play",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.motorola.genie",
+          "label": "Ayuda del dispositivo",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.videos",
+          "label": "Google TV",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.apps.photos",
+          "label": "Fotos",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.calendar",
+          "label": "Calendario",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.motorola.gamemode",
+          "label": "Juegos",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.accessibility.switchaccess",
+          "label": "Accesibilidad con interruptores",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.motorola.help",
+          "label": "Comentarios sobre Moto",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.motorola.moto",
+          "label": "Moto",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.facebook.katana",
+          "label": "Facebook",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.motorola.audiorecorder",
+          "label": "Grabadora",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.motorola.fmplayer",
+          "label": "Radio FM",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.adobe.reader",
+          "label": "Adobe Acrobat",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.android.settings",
+          "label": "Ajustes",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.motorola.launcher3",
+          "label": "Moto App Launcher",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.motorola.actions",
+          "label": "Acciones Moto y Gestos",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.android.phone",
+          "label": "Servicios telefónicos",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.microsoft.powerbim",
+          "label": "Power BI",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.android.systemui",
+          "label": "IU del sistema",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.apps.youtube.music",
+          "label": "YouTube Music",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.android.traceur",
+          "label": "Registro del sistema",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.microsoft.teams",
+          "label": "Teams",
+          "isSystem": false
+        },
+        {
+          "packageName": "com.google.android.inputmethod.latin",
+          "label": "Gboard",
+          "isSystem": true
+        },
+        {
+          "packageName": "com.google.android.apps.restore",
+          "label": "Android Switch",
+          "isSystem": true
+        }
+      ],
+      "allowed_apps": [
+        "com.android.chrome",
+        "com.motorola.camera3",
+        "com.google.android.calculator",
+        "com.whatsapp",
+        "com.waze",
+        "com.microsoft.powerbim",
+        "com.microsoft.teams",
+        "com.ionicframework.sfaLucema",
+        "com.google.android.apps.messaging",
+        "com.google.android.deskclock",
+        "com.google.android.dialer",
+        "com.google.android.apps.maps",
+        "com.google.android.apps.photos",
+        "com.adobe.reader"
+      ]
+    }
+  ]
+}
