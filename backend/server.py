@@ -9,6 +9,14 @@ import os
 import secrets
 import time
 import requests
+import sqlite3
+try:
+    import psycopg2
+    HAS_POSTGRES = True
+except ImportError:
+    HAS_POSTGRES = False
+
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 
 app = FastAPI()
@@ -48,51 +56,204 @@ async def auth_and_cache_middleware(request: Request, call_next):
     return response
 
 
-CONFIG_FILE = "config.json"
-DEVICES_FILE = "devices.json"
+class Database:
+    def __init__(self):
+        self.is_postgres = False
+        if DATABASE_URL and (DATABASE_URL.startswith("postgres://") or DATABASE_URL.startswith("postgresql://")):
+            self.is_postgres = True
+            self.db_url = DATABASE_URL
+            if self.db_url.startswith("postgres://"):
+                self.db_url = self.db_url.replace("postgres://", "postgresql://", 1)
+            print("[Database] Using PostgreSQL persistent database")
+        else:
+            self.db_url = "flshield.db"
+            print("[Database] Using SQLite local database (flshield.db)")
+        self.init_db()
+
+    def get_connection(self):
+        if self.is_postgres:
+            if not HAS_POSTGRES:
+                raise RuntimeError("psycopg2 is not installed but DATABASE_URL is set to PostgreSQL")
+            return psycopg2.connect(self.db_url)
+        else:
+            return sqlite3.connect(self.db_url)
+
+    def init_db(self):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS config_settings (
+                key VARCHAR(50) PRIMARY KEY,
+                value TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS devices (
+                device_id VARCHAR(100) PRIMARY KEY,
+                device_key VARCHAR(100),
+                name VARCHAR(100),
+                blocked INT,
+                allowed_apps TEXT,
+                installed_apps TEXT,
+                last_seen_at REAL,
+                last_unlock_request_at REAL,
+                last_block_request_at REAL,
+                clear_data_password VARCHAR(100)
+            )
+        """)
+        conn.commit()
+        conn.close()
+
+    def _execute(self, query, params=(), commit=True, fetchall=False, fetchone=False):
+        if self.is_postgres:
+            query = query.replace("?", "%s")
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            result = None
+            if fetchall:
+                result = cursor.fetchall()
+            elif fetchone:
+                result = cursor.fetchone()
+            if commit:
+                conn.commit()
+            return result
+        except Exception as e:
+            print(f"⚠️ DB Error executing query: {query}. Error: {e}")
+            raise e
+        finally:
+            conn.close()
+
+    def get_config(self) -> Optional[dict]:
+        row = self._execute("SELECT value FROM config_settings WHERE key = ?", ("global_config",), commit=False, fetchone=True)
+        if row:
+            return json.loads(row[0])
+        return None
+
+    def save_config(self, config: dict):
+        val_str = json.dumps(config, ensure_ascii=False)
+        self._execute("""
+            INSERT INTO config_settings (key, value)
+            VALUES (?, ?)
+            ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value
+        """, ("global_config", val_str))
+
+    def get_devices(self) -> list:
+        rows = self._execute("""
+            SELECT device_id, device_key, name, blocked, allowed_apps, installed_apps, 
+                   last_seen_at, last_unlock_request_at, last_block_request_at, clear_data_password
+            FROM devices
+        """, commit=False, fetchall=True)
+        devices = []
+        for r in rows:
+            devices.append({
+                "device_id": r[0],
+                "device_key": r[1],
+                "name": r[2] or "",
+                "blocked": bool(r[3]),
+                "allowed_apps": json.loads(r[4]) if r[4] else None,
+                "installed_apps": json.loads(r[5]) if r[5] else [],
+                "last_seen_at": r[6],
+                "last_unlock_request_at": r[7],
+                "last_block_request_at": r[8],
+                "clear_data_password": r[9]
+            })
+        return devices
+
+    def save_device(self, d: dict):
+        allowed_apps_str = json.dumps(d.get("allowed_apps")) if d.get("allowed_apps") is not None else None
+        installed_apps_str = json.dumps(d.get("installed_apps", []))
+        self._execute("""
+            INSERT INTO devices (
+                device_id, device_key, name, blocked, allowed_apps, installed_apps, 
+                last_seen_at, last_unlock_request_at, last_block_request_at, clear_data_password
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(device_id) DO UPDATE SET
+                device_key = EXCLUDED.device_key,
+                name = EXCLUDED.name,
+                blocked = EXCLUDED.blocked,
+                allowed_apps = EXCLUDED.allowed_apps,
+                installed_apps = EXCLUDED.installed_apps,
+                last_seen_at = EXCLUDED.last_seen_at,
+                last_unlock_request_at = EXCLUDED.last_unlock_request_at,
+                last_block_request_at = EXCLUDED.last_block_request_at,
+                clear_data_password = EXCLUDED.clear_data_password
+        """, (
+            d["device_id"],
+            d.get("device_key"),
+            d.get("name", ""),
+            1 if d.get("blocked", False) else 0,
+            allowed_apps_str,
+            installed_apps_str,
+            d.get("last_seen_at", 0.0),
+            d.get("last_unlock_request_at"),
+            d.get("last_block_request_at"),
+            d.get("clear_data_password")
+        ))
+
+    def delete_device(self, device_id: str):
+        self._execute("DELETE FROM devices WHERE device_id = ?", (device_id,))
+
+    def delete_all_devices(self):
+        self._execute("DELETE FROM devices")
+
+db = Database()
+
 APKS_DIR = os.path.join("public", "apks")
 if not os.path.exists(APKS_DIR):
     os.makedirs(APKS_DIR, exist_ok=True)
 
 
+
 # ─── Config helpers ───────────────────────────────────────────────────────────
 
 def load_config() -> dict:
-    if not os.path.exists(CONFIG_FILE):
-        default = {
+    cfg = db.get_config()
+    if cfg is None:
+        cfg = {
             "master_password": "1234",
             "allowed_apps": [],
             "block_gps": False,
             "block_datetime": True,
-            "device_names": {}  # deviceId -> custom name
+            "device_names": {},
+            "always_blocked": ["com.android.settings", "com.android.providers.settings"],
+            "always_allowed": ["com.example.applocker", "com.android.systemui", "com.android.launcher", "com.google.android.apps.nexuslauncher"],
+            "clear_data_password": "5678"
         }
-        save_config(default)
-        return default
-    with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-        cfg = json.load(f)
+        db.save_config(cfg)
+    else:
+        # Guarantee fallback keys are present
         if "device_names" not in cfg:
             cfg["device_names"] = {}
-        return cfg
+        if "always_blocked" not in cfg:
+            cfg["always_blocked"] = ["com.android.settings", "com.android.providers.settings"]
+        if "always_allowed" not in cfg:
+            cfg["always_allowed"] = ["com.example.applocker", "com.android.systemui", "com.android.launcher", "com.google.android.apps.nexuslauncher"]
+        if "clear_data_password" not in cfg:
+            cfg["clear_data_password"] = "5678"
+    return cfg
 
 def save_config(config: dict):
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(config, f, indent=2, ensure_ascii=False)
+    db.save_config(config)
 
 def load_devices_db() -> dict:
-    if not os.path.exists(DEVICES_FILE):
-        db = {"devices": []}
-        save_devices_db(db)
-        return db
-    with open(DEVICES_FILE, "r", encoding="utf-8") as f:
-        db = json.load(f)
-    if "devices" not in db:
-        db["devices"] = []
-    return db
+    return {"devices": db.get_devices()}
 
+def save_devices_db(db_dict: dict):
+    # Identify and apply deletions
+    current_ids = {d["device_id"] for d in db_dict.get("devices", [])}
+    stored_devices = db.get_devices()
+    stored_ids = {d["device_id"] for d in stored_devices}
+    
+    deleted_ids = stored_ids - current_ids
+    for d_id in deleted_ids:
+        db.delete_device(d_id)
+        
+    # Apply updates/inserts
+    for d in db_dict.get("devices", []):
+        db.save_device(d)
 
-def save_devices_db(db: dict):
-    with open(DEVICES_FILE, "w", encoding="utf-8") as f:
-        json.dump(db, f, indent=2, ensure_ascii=False)
 
 
 def find_device_record(device_id: str, db: Optional[dict] = None) -> Optional[dict]:

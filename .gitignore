@@ -24,6 +24,8 @@ backend/devices.json
 backend/config.json
 backend/*.log
 backend/*.txt
+backend/*.db
+*.db
 backend/public/apks/*
 !backend/public/apks/com.example.applocker.apk
 !backend/public/apks/qrious.min.js
