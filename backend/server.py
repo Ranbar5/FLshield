@@ -116,6 +116,63 @@ class Database:
                 
         conn.commit()
         conn.close()
+        self.migrate_legacy_files()
+
+    def migrate_legacy_files(self):
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        config_json_path = os.path.join(base_dir, "config.json")
+        devices_json_path = os.path.join(base_dir, "devices.json")
+        
+        if not os.path.exists(config_json_path) and not os.path.exists(devices_json_path):
+            return
+
+        print("[Database] Legacy JSON files found. Checking if migration is needed...")
+        
+        try:
+            config_rows = self._execute("SELECT COUNT(*) FROM config_settings", commit=False, fetchone=True)
+            devices_rows = self._execute("SELECT COUNT(*) FROM devices", commit=False, fetchone=True)
+            db_empty = (config_rows and config_rows[0] == 0) and (devices_rows and devices_rows[0] == 0)
+        except Exception as e:
+            print(f"⚠️ Error checking DB status for migration: {e}")
+            return
+
+        if not db_empty:
+            print("[Database] SQL database already contains data. Skipping legacy file migration.")
+            return
+
+        print("[Database] SQL database is empty. Migrating legacy JSON files...")
+        
+        # 1. Migrate config
+        if os.path.exists(config_json_path):
+            try:
+                with open(config_json_path, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                self.save_config(cfg)
+                print(f"[Database] Migrated config.json successfully.")
+            except Exception as e:
+                print(f"⚠️ Error migrating config.json: {e}")
+
+        # 2. Migrate devices
+        if os.path.exists(devices_json_path):
+            try:
+                with open(devices_json_path, "r", encoding="utf-8") as f:
+                    devices_data = json.load(f)
+                devices_list = devices_data.get("devices", [])
+                for d in devices_list:
+                    self.save_device(d)
+                print(f"[Database] Migrated {len(devices_list)} devices from devices.json successfully.")
+            except Exception as e:
+                print(f"⚠️ Error migrating devices.json: {e}")
+                
+        # Rename legacy files so they are not processed again
+        try:
+            if os.path.exists(config_json_path):
+                os.rename(config_json_path, config_json_path + ".bak")
+            if os.path.exists(devices_json_path):
+                os.rename(devices_json_path, devices_json_path + ".bak")
+            print("[Database] Renamed legacy JSON files to .bak")
+        except Exception as e:
+            print(f"⚠️ Error renaming legacy files: {e}")
 
     def _execute(self, query, params=(), commit=True, fetchall=False, fetchone=False):
         if self.is_postgres:
