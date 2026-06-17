@@ -74,6 +74,7 @@ class KioskHomeActivity : ComponentActivity() {
     private lateinit var devicePolicyManager: DevicePolicyManager
     private lateinit var adminComponent: ComponentName
     private var appsState = mutableStateOf<List<AppItem>>(emptyList())
+    private var deviceNameState = mutableStateOf("")
     private var isDefaultHomeState = mutableStateOf(false)
     private var homeSettingsPrompted = false
 
@@ -86,12 +87,14 @@ class KioskHomeActivity : ComponentActivity() {
     private val configReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             appsState.value = loadAllowedApps()
+            deviceNameState.value = prefs.deviceName
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = AppLockPreferences(this)
+        deviceNameState.value = prefs.deviceName
         devicePolicyManager = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
         adminComponent = ComponentName(this, com.example.applocker.AppLockerDeviceAdminReceiver::class.java)
         appsState.value = loadAllowedApps()
@@ -170,6 +173,7 @@ class KioskHomeActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         appsState.value = loadAllowedApps()
+        deviceNameState.value = prefs.deviceName
         isDefaultHomeState.value = isCurrentDefaultHome()
         if (!com.example.applocker.service.SettingsMonitorService.isKioskPaused()) {
             startLockTaskIfPermitted()
@@ -206,6 +210,7 @@ class KioskHomeActivity : ComponentActivity() {
     @Composable
     private fun KioskScreen() {
         val apps by appsState
+        val deviceName by deviceNameState
         val isDefaultHome by isDefaultHomeState
         var currentTime by remember { mutableStateOf(getCurrentTime()) }
         var currentDate by remember { mutableStateOf(getCurrentDate()) }
@@ -250,13 +255,27 @@ class KioskHomeActivity : ComponentActivity() {
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(
-                            text = currentTime,
-                            fontSize = 56.sp,
-                            fontWeight = FontWeight.Light,
-                            color = Color.White,
-                            letterSpacing = (-2).sp
-                        )
+                        Row(
+                            verticalAlignment = Alignment.Bottom,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            if (deviceName.isNotBlank()) {
+                                Text(
+                                    text = deviceName,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF6366F1),
+                                    modifier = Modifier.padding(end = 8.dp, bottom = 8.dp)
+                                )
+                            }
+                            Text(
+                                text = currentTime,
+                                fontSize = 56.sp,
+                                fontWeight = FontWeight.Light,
+                                color = Color.White,
+                                letterSpacing = (-2).sp
+                            )
+                        }
                         Text(
                             text = currentDate,
                             fontSize = 14.sp,

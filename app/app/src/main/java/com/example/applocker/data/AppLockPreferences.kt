@@ -24,6 +24,7 @@ class AppLockPreferences(context: Context) {
         private const val KEY_DEVICE_ID            = "device_id"
         private const val KEY_DEVICE_KEY           = "device_key"
         private const val KEY_CLEAR_DATA_PASS      = "clear_data_password"
+        private const val KEY_DEVICE_NAME          = "device_name"
 
         // ── Siempre bloqueadas ──────────────────────────────────────────────
         val ALWAYS_BLOCKED = setOf(
@@ -140,6 +141,10 @@ class AppLockPreferences(context: Context) {
             val pass = json.getString("clearDataPassword")
             if (pass.isNotBlank()) clearDataPassword = pass
         }
+        if (json.has("deviceName")) {
+            val name = json.getString("deviceName")
+            deviceName = name
+        }
     }
 
     private fun jsonArrayToSet(arr: JSONArray): Set<String> {
@@ -203,6 +208,10 @@ class AppLockPreferences(context: Context) {
     var clearDataPassword: String
         get() = prefs.getString(KEY_CLEAR_DATA_PASS, "5678") ?: "5678"
         set(value) { prefs.edit().putString(KEY_CLEAR_DATA_PASS, value).apply() }
+
+    var deviceName: String
+        get() = prefs.getString(KEY_DEVICE_NAME, "") ?: ""
+        set(value) { prefs.edit().putString(KEY_DEVICE_NAME, value).apply() }
 
     var isProvisioned: Boolean
         get() = prefs.getBoolean(KEY_PROVISIONED, false)

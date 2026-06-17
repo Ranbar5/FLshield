@@ -518,6 +518,7 @@ async def push_config_to_devices():
         payload = json.dumps({
             "action": "config_update",
             "allowedApps": allowed_apps,
+            "deviceName": device.get("name", "") if device else "",
             "blockGps": config.get("block_gps", True),
             "blockDateTime": config.get("block_datetime", True),
             "localPassword": config.get("master_password", "1234"),
@@ -651,6 +652,7 @@ async def provision(
         "status": "ok",
         "deviceId": deviceId,
         "deviceKey": device.get("device_key"),
+        "deviceName": device.get("name", "") if device else "",
         "allowedApps": allowed_apps,
         "alwaysBlocked": ALWAYS_BLOCKED,
         "alwaysAllowed": ALWAYS_ALLOWED,
@@ -1030,6 +1032,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         "type": "registered",
                         "deviceId": registered_id,
                         "deviceKey": device.get("device_key"),
+                        "deviceName": device.get("name", "") if device else "",
                         "allowedApps": allowed_apps,
                         "blockGps": config.get("block_gps", True),
                         "blockDateTime": config.get("block_datetime", True),
