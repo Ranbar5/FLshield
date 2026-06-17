@@ -66,8 +66,9 @@ class Database:
                 self.db_url = self.db_url.replace("postgres://", "postgresql://", 1)
             print("[Database] Using PostgreSQL persistent database")
         else:
-            self.db_url = "flshield.db"
-            print("[Database] Using SQLite local database (flshield.db)")
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            self.db_url = os.path.join(base_dir, "flshield.db")
+            print(f"[Database] Using SQLite local database ({self.db_url})")
         self.init_db()
 
     def get_connection(self):
@@ -95,12 +96,24 @@ class Database:
                 blocked INT,
                 allowed_apps TEXT,
                 installed_apps TEXT,
-                last_seen_at REAL,
+                last_seen REAL,
                 last_unlock_request_at REAL,
                 last_block_request_at REAL,
-                clear_data_password VARCHAR(100)
+                clear_data_password VARCHAR(100),
+                created_at REAL,
+                last_seen_at REAL
             )
         """)
+        
+        # Migrations to ensure columns created_at, last_seen, last_seen_at exist
+        for col in ["created_at", "last_seen", "last_seen_at"]:
+            try:
+                cursor.execute(f"ALTER TABLE devices ADD COLUMN {col} REAL")
+                conn.commit()
+                print(f"[Database] Migration: Added column '{col}' to devices table")
+            except Exception:
+                pass
+                
         conn.commit()
         conn.close()
 
@@ -142,11 +155,14 @@ class Database:
     def get_devices(self) -> list:
         rows = self._execute("""
             SELECT device_id, device_key, name, blocked, allowed_apps, installed_apps, 
-                   last_seen_at, last_unlock_request_at, last_block_request_at, clear_data_password
+                   last_seen, last_unlock_request_at, last_block_request_at, clear_data_password, 
+                   created_at, last_seen_at
             FROM devices
         """, commit=False, fetchall=True)
         devices = []
         for r in rows:
+            last_seen_val = r[6] if r[6] is not None else (r[11] if r[11] is not None else 0.0)
+            created_at_val = r[10] if r[10] is not None else last_seen_val
             devices.append({
                 "device_id": r[0],
                 "device_key": r[1],
@@ -154,31 +170,38 @@ class Database:
                 "blocked": bool(r[3]),
                 "allowed_apps": json.loads(r[4]) if r[4] else None,
                 "installed_apps": json.loads(r[5]) if r[5] else [],
-                "last_seen_at": r[6],
+                "last_seen": last_seen_val,
+                "last_seen_at": last_seen_val,
                 "last_unlock_request_at": r[7],
                 "last_block_request_at": r[8],
-                "clear_data_password": r[9]
+                "clear_data_password": r[9],
+                "created_at": created_at_val
             })
         return devices
 
     def save_device(self, d: dict):
         allowed_apps_str = json.dumps(d.get("allowed_apps")) if d.get("allowed_apps") is not None else None
         installed_apps_str = json.dumps(d.get("installed_apps", []))
+        last_seen_val = d.get("last_seen", d.get("last_seen_at", 0.0))
+        created_at_val = d.get("created_at", last_seen_val)
         self._execute("""
             INSERT INTO devices (
                 device_id, device_key, name, blocked, allowed_apps, installed_apps, 
-                last_seen_at, last_unlock_request_at, last_block_request_at, clear_data_password
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                last_seen, last_unlock_request_at, last_block_request_at, clear_data_password, 
+                created_at, last_seen_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(device_id) DO UPDATE SET
                 device_key = EXCLUDED.device_key,
                 name = EXCLUDED.name,
                 blocked = EXCLUDED.blocked,
                 allowed_apps = EXCLUDED.allowed_apps,
                 installed_apps = EXCLUDED.installed_apps,
-                last_seen_at = EXCLUDED.last_seen_at,
+                last_seen = EXCLUDED.last_seen,
                 last_unlock_request_at = EXCLUDED.last_unlock_request_at,
                 last_block_request_at = EXCLUDED.last_block_request_at,
-                clear_data_password = EXCLUDED.clear_data_password
+                clear_data_password = EXCLUDED.clear_data_password,
+                created_at = EXCLUDED.created_at,
+                last_seen_at = EXCLUDED.last_seen_at
         """, (
             d["device_id"],
             d.get("device_key"),
@@ -186,10 +209,12 @@ class Database:
             1 if d.get("blocked", False) else 0,
             allowed_apps_str,
             installed_apps_str,
-            d.get("last_seen_at", 0.0),
+            last_seen_val,
             d.get("last_unlock_request_at"),
             d.get("last_block_request_at"),
-            d.get("clear_data_password")
+            d.get("clear_data_password"),
+            created_at_val,
+            last_seen_val
         ))
 
     def delete_device(self, device_id: str):
