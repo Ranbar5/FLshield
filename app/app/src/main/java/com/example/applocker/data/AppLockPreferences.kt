@@ -25,6 +25,7 @@ class AppLockPreferences(context: Context) {
         private const val KEY_DEVICE_KEY           = "device_key"
         private const val KEY_CLEAR_DATA_PASS      = "clear_data_password"
         private const val KEY_DEVICE_NAME          = "device_name"
+private const val KEY_FONT_SIZE           = "font_size"
 
         // ── Siempre bloqueadas ──────────────────────────────────────────────
         val ALWAYS_BLOCKED = setOf(
@@ -212,6 +213,10 @@ class AppLockPreferences(context: Context) {
     var deviceName: String
         get() = prefs.getString(KEY_DEVICE_NAME, "") ?: ""
         set(value) { prefs.edit().putString(KEY_DEVICE_NAME, value).apply() }
+
+    var fontSizeSp: Int
+        get() = prefs.getInt(KEY_FONT_SIZE, 16)
+        set(value) { prefs.edit().putInt(KEY_FONT_SIZE, value).apply() }
 
     var isProvisioned: Boolean
         get() = prefs.getBoolean(KEY_PROVISIONED, false)

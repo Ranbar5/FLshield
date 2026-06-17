@@ -36,15 +36,16 @@ class SettingsActivity : ComponentActivity() {
                 SettingsScreen(
                     prefs = prefs,
                     onSave = { serverUrl ->
-                        prefs.serverUrl = serverUrl
-                        // Restart WebSocket connection
-                        stopService(Intent(this, AppLockService::class.java))
-                        Thread.sleep(500)
-                        startService(Intent(this, AppLockService::class.java).apply {
-                            action = AppLockService.ACTION_START
-                        })
-                        finish()
-                    },
+    prefs.serverUrl = serverUrl
+    prefs.fontSizeSp = fontSize
+    // Restart WebSocket connection
+    stopService(Intent(this, AppLockService::class.java))
+    Thread.sleep(500)
+    startService(Intent(this, AppLockService::class.java).apply {
+        action = AppLockService.ACTION_START
+    })
+    finish()
+},
                     onCancel = { finish() }
                 )
             }
@@ -59,6 +60,7 @@ fun SettingsScreen(
     onCancel: () -> Unit
 ) {
     var serverUrl by remember { mutableStateOf(prefs.serverUrl ?: "") }
+    var fontSize by remember { mutableStateOf(prefs.fontSizeSp) }
     var error by remember { mutableStateOf("") }
     var infoMessage by remember { mutableStateOf("") }
     var newLocalPassword by remember { mutableStateOf("") }
@@ -126,10 +128,29 @@ fun SettingsScreen(
 
                 if (error.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(10.dp))
-                    Text(error, fontSize = 12.sp, color = Color(0xFFEF4444))
-                }
+if (error.isNotEmpty()) {
+    Spacer(modifier = Modifier.height(10.dp))
+    Text(error, fontSize = 12.sp, color = Color(0xFFEF4444))
+}
 
-                Spacer(modifier = Modifier.height(28.dp))
+// Font size setting
+Text(
+    "Tamaño de letra",
+    fontSize = 12.sp,
+    color = Color(0xFF64748B),
+    fontWeight = FontWeight.Medium
+)
+Spacer(modifier = Modifier.height(8.dp))
+Slider(
+    value = fontSize,
+    onValueChange = { fontSize = it },
+    valueRange = 10f..30f,
+    steps = 20,
+    modifier = Modifier.fillMaxWidth()
+)
+Spacer(modifier = Modifier.height(12.dp))
+
+Spacer(modifier = Modifier.height(28.dp))
 
                 Text(
                     "PIN local del dispositivo",
