@@ -1,0 +1,1738 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FLShield — Centro de Control</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="/qrious.min.js"></script>
+    <style>
+        :root {
+            --bg: #090e1a;
+            --surface: #111827;
+            --surface2: #1a2235;
+            --border: rgba(255,255,255,0.07);
+            --primary: #6366f1;
+            --primary-glow: rgba(99,102,241,0.25);
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --text: #f1f5f9;
+            --muted: #64748b;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            background-image:
+                radial-gradient(circle at 15% 15%, rgba(99,102,241,0.07) 0%, transparent 45%),
+                radial-gradient(circle at 85% 80%, rgba(16,185,129,0.04) 0%, transparent 40%);
+        }
+
+        /* ── Layout ── */
+        .layout { display: flex; min-height: 100vh; }
+
+        aside {
+            width: 240px; flex-shrink: 0;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            display: flex; flex-direction: column;
+            padding: 28px 0;
+            position: sticky; top: 0; height: 100vh;
+        }
+        .logo {
+            padding: 0 24px 28px;
+            border-bottom: 1px solid var(--border);
+        }
+        .logo h1 { font-size: 1.1rem; font-weight: 800; letter-spacing: -0.02em; }
+        .logo h1 span { color: var(--primary); }
+        .logo p { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+        nav { padding: 16px 12px; flex-grow: 1; }
+        .nav-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 9px 12px; border-radius: 10px;
+            font-size: 0.85rem; font-weight: 500;
+            color: var(--muted); cursor: pointer;
+            transition: all 0.15s;
+            margin-bottom: 2px;
+        }
+        .nav-item:hover { background: rgba(255,255,255,0.04); color: var(--text); }
+        .nav-item.active { background: rgba(99,102,241,0.15); color: var(--primary); }
+        .nav-item .icon { font-size: 1rem; width: 20px; text-align: center; }
+
+        .server-badge {
+            margin: 0 12px 12px;
+            padding: 10px 12px;
+            background: rgba(16,185,129,0.1);
+            border: 1px solid rgba(16,185,129,0.2);
+            border-radius: 10px;
+            font-size: 0.75rem;
+            color: var(--success);
+            display: flex; align-items: center; gap: 8px;
+        }
+        .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); flex-shrink: 0; animation: blink 2s infinite; }
+        @keyframes blink { 0%,100%{opacity:1;box-shadow:0 0 6px var(--success);} 50%{opacity:0.4;box-shadow:none;} }
+
+        main { flex: 1; overflow: auto; }
+        .page { display: none; padding: 36px; max-width: 960px; }
+        .page.active { display: block; }
+
+        /* ── Page header ── */
+        .page-header { margin-bottom: 28px; display: flex; justify-content: space-between; align-items: flex-start; }
+        .page-header div h2 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.025em; }
+        .page-header div p { font-size: 0.85rem; color: var(--muted); margin-top: 4px; }
+
+        /* ── Cards ── */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+        .card-title {
+            font-size: 0.85rem; font-weight: 600; color: var(--muted);
+            text-transform: uppercase; letter-spacing: 0.06em;
+            margin-bottom: 16px;
+        }
+
+        /* ── Device grid ── */
+        .device-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+        .device-card {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 14px; padding: 20px;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+        .device-card:hover { transform: translateY(-3px); border-color: rgba(99,102,241,0.3); }
+        .device-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+        .device-name { font-weight: 700; font-size: 0.95rem; }
+        .device-name-display { cursor: pointer; display: flex; align-items: center; gap: 6px; }
+        .device-name-display:hover .edit-hint { opacity: 1; }
+        .edit-hint { font-size: 0.7rem; color: var(--muted); opacity: 0; transition: opacity 0.15s; }
+        .device-id { font-size: 0.7rem; color: var(--muted); font-family: monospace; margin-bottom: 10px; }
+        .device-time { font-size: 0.7rem; color: var(--muted); margin-bottom: 14px; }
+        .device-actions { display: flex; gap: 8px; margin-top: 12px; }
+        .badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 3px 10px; border-radius: 99px;
+            font-size: 0.72rem; font-weight: 600;
+        }
+        .badge-green { background: rgba(16,185,129,0.12); color: var(--success); }
+        .badge-red { background: rgba(239,68,68,0.12); color: var(--danger); }
+        .badge-yellow { background: rgba(245,158,11,0.12); color: var(--warning); }
+
+        /* ── Name edit inline ── */
+        .name-edit { display: flex; gap: 6px; align-items: center; }
+        .name-edit input {
+            padding: 4px 8px; width: 160px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid var(--primary); border-radius: 8px;
+            color: var(--text); font-family: inherit; font-size: 0.85rem;
+            outline: none;
+        }
+
+        /* ── Empty state ── */
+        .empty { text-align: center; padding: 52px 24px; color: var(--muted); }
+        .empty .icon { font-size: 2.5rem; margin-bottom: 12px; opacity: 0.4; }
+        .empty p { font-size: 0.9rem; }
+
+        /* ── Forms ── */
+        label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 6px; font-weight: 500; }
+        input[type=text], input[type=password] {
+            width: 100%; padding: 10px 14px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid var(--border);
+            border-radius: 10px; color: var(--text);
+            font-family: inherit; font-size: 0.9rem;
+            outline: none; transition: border-color 0.15s;
+        }
+        input:focus { border-color: var(--primary); }
+        .row { display: flex; gap: 12px; align-items: flex-end; margin-bottom: 16px; }
+        .row > * { flex: 1; }
+        .form-group { margin-bottom: 16px; }
+
+        /* Toggle switch */
+        .toggle-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--border); }
+        .toggle-row:last-child { border-bottom: none; }
+        .toggle-info h4 { font-size: 0.9rem; font-weight: 600; }
+        .toggle-info p { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+        .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute; cursor: pointer; inset: 0;
+            background: rgba(255,255,255,0.1);
+            border-radius: 99px; transition: 0.2s;
+        }
+        .slider:before {
+            position: absolute; content: "";
+            width: 18px; height: 18px; left: 3px; bottom: 3px;
+            background: white; border-radius: 50%; transition: 0.2s;
+        }
+        input:checked + .slider { background: var(--primary); }
+        input:checked + .slider:before { transform: translateX(20px); }
+
+        /* Buttons */
+        .btn {
+            padding: 9px 18px; border-radius: 10px;
+            font-size: 0.85rem; font-weight: 600;
+            cursor: pointer; border: none;
+            transition: all 0.15s; display: inline-flex;
+            align-items: center; gap: 6px;
+        }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { filter: brightness(1.15); }
+        .btn-success { background: var(--success); color: white; }
+        .btn-success:hover { filter: brightness(1.1); }
+        .btn-danger { background: transparent; border: 1px solid rgba(239,68,68,0.4); color: var(--danger); }
+        .btn-danger:hover { background: rgba(239,68,68,0.1); }
+        .btn-ghost { background: rgba(255,255,255,0.06); color: var(--text); }
+        .btn-ghost:hover { background: rgba(255,255,255,0.1); }
+        .btn-sm { padding: 6px 12px; font-size: 0.78rem; }
+
+        /* Whitelist chips */
+        .chip-area { display: flex; flex-wrap: wrap; gap: 8px; min-height: 48px; margin-top: 12px; }
+        .chip {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 5px 12px; background: rgba(99,102,241,0.12);
+            border: 1px solid rgba(99,102,241,0.25);
+            border-radius: 99px; font-size: 0.78rem;
+            font-family: monospace; color: #a5b4fc;
+        }
+        .chip-x { cursor: pointer; color: var(--muted); font-size: 1rem; line-height: 1; }
+        .chip-x:hover { color: var(--danger); }
+
+        /* Unlock requests */
+        .unlock-card {
+            border: 1px solid rgba(245,158,11,0.3);
+            background: rgba(245,158,11,0.05);
+            border-radius: 14px; padding: 18px;
+            margin-bottom: 12px;
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 16px; flex-wrap: wrap;
+        }
+        .unlock-info h4 { font-weight: 600; font-size: 0.9rem; }
+        .unlock-info p { font-size: 0.78rem; color: var(--muted); }
+        .unlock-actions { display: flex; gap: 8px; align-items: center; }
+        .unlock-pass { width: 160px !important; }
+
+        /* Toast */
+        #toast {
+            position: fixed; bottom: 24px; right: 24px;
+            background: var(--surface2); border: 1px solid var(--border);
+            padding: 14px 20px; border-radius: 12px;
+            font-size: 0.85rem; font-weight: 500;
+            box-shadow: 0 12px 28px rgba(0,0,0,0.35);
+            transition: all 0.3s; opacity: 0; transform: translateY(16px);
+            pointer-events: none; z-index: 100;
+        }
+        #toast.show { opacity: 1; transform: translateY(0); }
+        #toast.ok { border-left: 3px solid var(--success); }
+        #toast.err { border-left: 3px solid var(--danger); }
+    </style>
+</head>
+<body>
+<div class="layout">
+
+    <!-- Sidebar -->
+    <aside>
+        <div class="logo">
+            <h1>FL<span>Shield</span></h1>
+            <p>Centro de Control v3</p>
+        </div>
+        <nav>
+            <div class="nav-item active" onclick="navigate('devices', this)">
+                <span class="icon">📱</span> Dispositivos
+            </div>
+            <div class="nav-item" onclick="navigate('whitelist', this)">
+                <span class="icon">✅</span> Apps Permitidas
+            </div>
+            <div class="nav-item" onclick="navigate('rules', this)">
+                <span class="icon">🔒</span> Reglas de Bloqueo
+            </div>
+            <div class="nav-item" onclick="navigate('password', this)">
+                <span class="icon">🔑</span> Contraseña
+            </div>
+            <div class="nav-item" onclick="navigate('apks', this)">
+                <span class="icon">📦</span> Aplicaciones APK
+            </div>
+            <div class="nav-item" onclick="navigate('adb', this)">
+                <span class="icon">⚡</span> Instalador ADB
+            </div>
+        </nav>
+        <div class="server-badge" id="server-badge">
+            <span class="dot"></span>
+            Servidor activo · cargando...
+        </div>
+    </aside>
+
+    <!-- Main -->
+    <main>
+
+        <!-- Page: Devices -->
+        <div class="page active" id="page-devices">
+            <div class="page-header">
+                <div>
+                    <h2>Dispositivos Conectados</h2>
+                    <p>Monitorea dispositivos en tiempo real, renómbralos y gestiona solicitudes de desbloqueo.</p>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-success btn-sm" onclick="openEnrollmentModal()">⚙️ Enrolar QR</button>
+                    <button class="btn btn-primary btn-sm" onclick="syncAllDevices()" title="Forzar sincronización de APKs y configuraciones en todos los dispositivos">🔄 Sincronizar todo</button>
+                    <button class="btn btn-danger btn-sm" onclick="clearAllDevices()" title="Desconectar todos">🧹 Limpiar todo</button>
+                </div>
+            </div>
+
+            <div class="card" id="device-summary-card">
+                <div class="card-title">Estado actual</div>
+                <p id="device-summary-text">Cargando estado del servidor...</p>
+            </div>
+
+            <!-- Pending Unlock Requests -->
+            <div class="card" id="unlock-section" style="display:none">
+                <div class="card-title">⚠️ Solicitudes de Desbloqueo Pendientes</div>
+                <div id="unlock-list"></div>
+            </div>
+
+            <!-- Pending Block Requests -->
+            <div class="card" id="block-section" style="display:none">
+                <div class="card-title">🚫 Solicitudes de Bloqueo Remoto</div>
+                <div id="block-list"></div>
+            </div>
+
+            <!-- Devices -->
+            <div class="card">
+                <div class="card-title">Dispositivos en línea</div>
+                <div class="device-grid" id="device-grid">
+                    <div class="empty">
+                        <div class="icon">📡</div>
+                        <p>Esperando conexiones de dispositivos Android...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Page: Whitelist -->
+        <div class="page" id="page-whitelist">
+            <div class="page-header">
+                <div>
+                    <h2>Apps Permitidas</h2>
+                    <p>Solo las apps en esta lista podrán ser usadas en los dispositivos. Usa el nombre del paquete (Package Name).</p>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-title">Agregar aplicación</div>
+                <div class="row">
+                    <div>
+                        <label>Package Name de la app</label>
+                        <input type="text" id="pkg-input" placeholder="ej. com.whatsapp, com.spotify.music" />
+                    </div>
+                    <div style="flex:0">
+                        <button class="btn btn-primary" onclick="addApp()">➕ Agregar</button>
+                    </div>
+                </div>
+                <div class="chip-area" id="app-chips"></div>
+                <p style="font-size:0.78rem;color:var(--muted);margin-top:12px;">
+                    Sin apps aquí el kiosco solo muestra teléfono/mensajes. Tras guardar, el dispositivo actualiza en segundos.
+                </p>
+                <div style="margin-top: 14px;">
+                    <div class="card-title" style="margin-bottom:8px;">Atajos Motorola / Google</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                        <button type="button" class="btn btn-sm" onclick="addPreset('com.android.chrome')">Chrome</button>
+                        <button type="button" class="btn btn-sm" onclick="addPreset('com.motorola.camera3')">Cámara Moto</button>
+                        <button type="button" class="btn btn-sm" onclick="addPreset('com.google.android.apps.photos')">Fotos</button>
+                        <button type="button" class="btn btn-sm" onclick="addPreset('com.google.android.calculator')">Calculadora</button>
+                        <button type="button" class="btn btn-sm" onclick="addPreset('com.google.android.gm')">Gmail</button>
+                        <button type="button" class="btn btn-sm" onclick="addPreset('com.whatsapp')">WhatsApp</button>
+                    </div>
+                </div>
+                <div style="margin-top: 20px; display: flex; gap: 10px;">
+                    <button class="btn btn-success" onclick="saveWhitelist()">💾 Guardar cambios</button>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-title">Siempre bloqueadas (no editables)</div>
+                <div class="chip-area" id="always-blocked-chips"></div>
+            </div>
+            <div class="card">
+                <div class="card-title">Siempre permitidas (no editables)</div>
+                <div class="chip-area" id="always-allowed-chips"></div>
+            </div>
+        </div>
+
+        <!-- Page: Rules -->
+        <div class="page" id="page-rules">
+            <div class="page-header">
+                <div>
+                    <h2>Reglas de Bloqueo</h2>
+                    <p>Configura qué funciones del sistema están restringidas en los dispositivos.</p>
+                </div>
+            </div>
+            <div class="card">
+                <div class="toggle-row">
+                    <div class="toggle-info">
+                        <h4>🕐 Bloquear Fecha y Hora</h4>
+                        <p>Impide que el usuario cambie la fecha, hora o zona horaria del sistema.</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="toggle-datetime" onchange="saveRules()" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="toggle-row">
+                    <div class="toggle-info">
+                        <h4>📍 Bloquear apagado de GPS</h4>
+                        <p>Impide que el usuario deshabilite la ubicación/GPS del dispositivo.</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="toggle-gps" onchange="saveRules()" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Page: Password -->
+        <div class="page" id="page-password">
+            <div class="page-header">
+                <div>
+                    <h2>Contraseña Maestra</h2>
+                    <p>Esta contraseña es requerida para aprobar solicitudes de desbloqueo desde los dispositivos.</p>
+                </div>
+            </div>
+            <div class="card">
+                <div class="form-group">
+                    <label>Nueva contraseña</label>
+                    <input type="password" id="new-pass" placeholder="Ingresa la nueva contraseña" />
+                </div>
+                <div class="form-group">
+                    <label>Confirmar contraseña</label>
+                    <input type="password" id="confirm-pass" placeholder="Repite la contraseña" />
+                </div>
+                <button class="btn btn-primary" onclick="savePassword()">🔑 Actualizar Contraseña</button>
+            </div>
+            <div class="card">
+                <div class="card-title">Borrado de Datos de Aplicaciones</div>
+                <p style="font-size:0.82rem; color: var(--muted); margin-bottom:14px; line-height:1.6;">
+                    Contraseña global utilizada en los dispositivos para permitir el borrado de caché y datos del almacenamiento de las aplicaciones autorizadas (ej. SFA Lucema).
+                </p>
+                <div class="form-group">
+                    <label>Contraseña Global de Borrado</label>
+                    <input type="text" id="global-clear-pass" placeholder="Por defecto: 5678" />
+                </div>
+                <button class="btn btn-primary" onclick="saveGlobalClearDataPassword()">💾 Guardar Contraseña de Borrado</button>
+            </div>
+            <div class="card">
+                <div class="card-title">⚠️ Importante</div>
+                <p style="font-size:0.82rem; color: var(--muted); line-height:1.6;">
+                    La contraseña <strong>solo existe en este servidor</strong>. Los dispositivos Android nunca conocen la contraseña. Cuando un usuario solicita desbloqueo, la solicitud aparece aquí y tú la apruebas ingresando esta contraseña.
+                </p>
+            </div>
+        </div>
+
+        <!-- Page: APKs -->
+        <div class="page" id="page-apks">
+            <div class="page-header">
+                <div>
+                    <h2>Aplicaciones APK</h2>
+                    <p>Sube archivos APK para que se instalen automáticamente en los dispositivos registrados al sincronizar.</p>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-title">Subir archivo APK</div>
+                <div class="row" style="align-items: center; margin-bottom: 0px;">
+                    <div style="flex: 2;">
+                        <input type="file" id="apk-file-input" accept=".apk" style="display: none;" onchange="handleApkFileSelected(this)" />
+                        <button class="btn btn-ghost" onclick="document.getElementById('apk-file-input').click()">📁 Seleccionar APK</button>
+                        <span id="apk-file-name" style="margin-left: 12px; font-size: 0.85rem; color: var(--muted);">Ningún archivo seleccionado</span>
+                    </div>
+                    <div style="flex: 1; text-align: right;">
+                        <button class="btn btn-primary" id="btn-upload-apk" onclick="uploadApkFile()" disabled>📥 Subir APK</button>
+                    </div>
+                </div>
+                <div id="upload-progress-container" style="display: none; margin-top: 14px;">
+                    <label>Progreso de subida</label>
+                    <div style="width: 100%; height: 8px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden;">
+                        <div id="upload-progress-bar" style="width: 0%; height: 100%; background: var(--primary); transition: width 0.15s;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Buscar en la Tienda (Mini Tienda)</div>
+                <div class="row" style="align-items: flex-end; margin-bottom: 0px;">
+                    <div style="flex: 2;">
+                        <label>Nombre de la aplicación a buscar</label>
+                        <input type="text" id="apk-search-query" placeholder="ej: Waze, WhatsApp, Teams, Zoom..." onkeydown="if(event.key === 'Enter') searchAppsStore()" />
+                    </div>
+                    <div style="flex: 0; text-align: right; margin-left: 12px;">
+                        <button class="btn btn-primary" onclick="searchAppsStore()">🔍 Buscar App</button>
+                    </div>
+                </div>
+                <div id="search-loading-text" style="display: none; margin-top: 14px; font-size: 0.85rem; color: var(--muted);">
+                     Buscando en la tienda... por favor espera.
+                </div>
+                <div id="apk-search-results" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; margin-top: 0px; max-height: 400px; overflow-y: auto; padding-right: 6px;">
+                    <!-- Results rendered dynamically -->
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Importar desde Google Play Store o Package Name</div>
+                <div class="row" style="align-items: flex-end; margin-bottom: 0px;">
+                    <div style="flex: 2;">
+                        <label>Enlace de Google Play Store o Nombre de Paquete</label>
+                        <input type="text" id="apk-url-input" placeholder="ej: https://play.google.com/store/apps/details?id=com.waze o com.waze" />
+                    </div>
+                    <div style="flex: 0; text-align: right; margin-left: 12px;">
+                        <button class="btn btn-primary" id="btn-download-apk-url" onclick="downloadApkFromUrl()">📥 Descargar e importar</button>
+                    </div>
+                </div>
+                <div id="download-progress-container" style="display: none; margin-top: 14px;">
+                    <p id="download-progress-text" style="font-size: 0.85rem; color: var(--muted);"></p>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-title">APKs en el Servidor</div>
+                <div id="apk-list" class="device-grid">
+                    <!-- Loaded dynamically -->
+                    <div class="empty">
+                        <div class="icon">📦</div>
+                        <p>No hay archivos APK en el servidor. Sube uno arriba.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Page: ADB Installer -->
+        <div class="page" id="page-adb">
+            <div class="page-header">
+                <div>
+                    <h2>Instalador y Aprovisionamiento ADB</h2>
+                    <p>Detecta dispositivos conectados por USB/Wi-Fi, instala la app FLShield y configúrala como Device Owner (Propietario del Dispositivo).</p>
+                </div>
+            </div>
+
+            <!-- Advertencia / Requisitos -->
+            <div class="card" style="border: 1px solid rgba(245,158,11,0.2); background: rgba(245,158,11,0.03);">
+                <div class="card-title" style="color: var(--warning); margin-bottom: 8px;">⚠️ Requisitos de Aprovisionamiento Owner</div>
+                <p style="font-size: 0.82rem; color: var(--muted); line-height: 1.5;">
+                    Para establecer <strong>Device Owner</strong> (kiosco completo sin bypass del usuario), el dispositivo Android debe estar <strong>restablecido de fábrica (Factory Reset)</strong> en la pantalla de bienvenida, y <strong>NO debe haber cuentas registradas</strong> (como Google o Samsung).
+                </p>
+                <p style="font-size: 0.82rem; color: var(--muted); margin-top: 8px; line-height: 1.5;">
+                    <strong>Pasos previos:</strong> Active la "Depuración por USB" en el teléfono (si ya está configurado) o use el enrolamiento normal. Si usa ADB, conecte el cable USB y autorice la depuración en la pantalla del celular.
+                </p>
+            </div>
+
+            <!-- ADB Device List -->
+            <div class="card">
+                <div class="card-title">Dispositivos detectados vía ADB</div>
+                <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+                    <button class="btn btn-ghost" onclick="refreshAdbDevices()">🔄 Buscar dispositivos</button>
+                </div>
+                <div id="adb-devices-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px;">
+                    <div class="empty" style="padding: 24px;">
+                        <p>No se han buscado dispositivos todavía. Pulsa el botón "Buscar dispositivos".</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Setup Form -->
+            <div class="card" id="adb-setup-card" style="display: none;">
+                <div class="card-title">Configuración de Instalación</div>
+                <div class="form-group">
+                    <label>Dispositivo seleccionado</label>
+                    <input type="text" id="selected-adb-device-id" readonly style="background: rgba(255,255,255,0.02); color: var(--muted); font-family: monospace;" />
+                </div>
+                <div class="form-group">
+                    <div class="toggle-row" style="padding: 10px 0;">
+                        <div class="toggle-info">
+                            <h4>Instalar SFA Lucema</h4>
+                            <p>Instalar la aplicación de preventas SFA Lucema (com.ionicframework.sfaLucema)</p>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="adb-chk-lucema" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="toggle-row" style="padding: 10px 0;">
+                        <div class="toggle-info">
+                            <h4>Instalar otras aplicaciones predeterminadas</h4>
+                            <p>Instalar el resto de APKs guardadas en el servidor (Waze, Teams, WhatsApp, etc.)</p>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="adb-chk-defaults" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <button class="btn btn-success" id="btn-start-adb-provision" onclick="startAdbProvision()">⚡ Iniciar Aprovisionamiento</button>
+            </div>
+
+            <!-- Provisioning progress & Logs -->
+            <div class="card" id="adb-progress-card" style="display: none;">
+                <div class="card-title">Progreso de Aprovisionamiento</div>
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                    <div class="dot" id="adb-progress-dot" style="background: var(--primary);"></div>
+                    <span id="adb-progress-status-text" style="font-weight: 600; font-size: 0.9rem;">Ejecutando aprovisionamiento...</span>
+                </div>
+                <label>Salida de la consola (Logs)</label>
+                <div id="adb-console-log" style="width: 100%; height: 260px; font-family: monospace; font-size: 0.78rem; padding: 12px; background: #05070c; border: 1px solid var(--border); border-radius: 10px; color: #34d399; overflow-y: auto; white-space: pre-wrap; line-height: 1.5;"></div>
+            </div>
+        </div>
+
+    </main>
+</div>
+
+<div id="toast"></div>
+
+<!-- Device Apps Modal -->
+<div id="apps-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:1000; align-items:center; justify-content:center;">
+    <div class="card" style="width: 90%; max-width: 650px; max-height: 85vh; display:flex; flex-direction:column; overflow:hidden; margin: 0; padding: 24px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <div>
+                <h3 style="font-size:1.2rem;" id="apps-modal-title">Aplicaciones del dispositivo</h3>
+                <p style="font-size:0.8rem; color:var(--muted); margin-top:2px;" id="apps-modal-subtitle">Cargando...</p>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="closeDeviceAppsModal()">✕ Cerrar</button>
+        </div>
+        
+        <div style="display:flex; gap:10px; margin-bottom:14px;">
+            <input type="text" id="apps-search" placeholder="🔍 Buscar por nombre o paquete..." oninput="filterDeviceApps()" style="flex:1;" />
+            <button class="btn btn-ghost btn-sm" onclick="resetDeviceApps()" id="btn-reset-device-apps" style="flex:0; white-space:nowrap; display:none;">🔄 Usar lista global</button>
+        </div>
+        
+        <div style="overflow-y:auto; flex:1; padding-right:6px;" id="apps-modal-list">
+            <!-- Apps loaded dynamically -->
+        </div>
+    </div>
+</div>
+
+<!-- Enrollment QR Modal -->
+<div id="enrollment-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:1000; align-items:center; justify-content:center; padding: 20px; overflow-y: auto;">
+    <div class="card" style="width: 100%; max-width: 600px; max-height: 90vh; display:flex; flex-direction:column; overflow:hidden; margin: 0; padding: 24px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-shrink: 0;">
+            <div>
+                <h3 style="font-size:1.2rem; color:var(--text);">Enrolamiento por Código QR</h3>
+                <p style="font-size:0.8rem; color:var(--muted); margin-top:2px;">Configura la red Wi-Fi y obtén el QR para enrolar dispositivos nuevos.</p>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="closeEnrollmentModal()">✕ Cerrar</button>
+        </div>
+        
+        <div style="overflow-y:auto; flex:1; padding-right:6px; margin-bottom: 16px;">
+            <p style="font-size: 0.85rem; color: var(--muted); margin-bottom: 16px; line-height: 1.5;">
+                Enciende el dispositivo nuevo (o restablecido de fábrica), y en la pantalla de bienvenida da <strong>6 toques rápidos</strong> en cualquier parte vacía. Se abrirá la cámara para escanear este código.
+            </p>
+
+            <div style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 200px;">
+                    <label>Nombre de Red Wi-Fi (SSID)</label>
+                    <input type="text" id="wifi-ssid" placeholder="Opcional: SSID de la red" oninput="updateEnrollmentQR()" />
+                </div>
+                <div style="flex: 1; min-width: 200px;">
+                    <label>Contraseña Wi-Fi</label>
+                    <input type="password" id="wifi-password" placeholder="Opcional: Contraseña de la red" oninput="updateEnrollmentQR()" />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Seguridad Wi-Fi</label>
+                <select id="wifi-security" onchange="updateEnrollmentQR()" style="width:100%; padding:10px 14px; background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:10px; color:var(--text); outline:none; font-family:inherit; font-size:0.9rem;">
+                    <option value="WPA" style="background:#111827;">WPA/WPA2 (Recomendado)</option>
+                    <option value="WEP" style="background:#111827;">WEP</option>
+                    <option value="NONE" style="background:#111827;">Sin Seguridad (Abierta)</option>
+                </select>
+            </div>
+
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.2); border-radius: 12px; padding: 20px; border: 1px dashed var(--border); margin-top: 20px; min-height: 250px;">
+                <canvas id="qr-canvas" style="background: white; padding: 12px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);"></canvas>
+                <div style="margin-top: 14px; text-align: center; width: 100%;">
+                    <p id="enrollment-server-info" style="font-size: 0.8rem; font-family: monospace; color: var(--success); word-break: break-all;"></p>
+                    <p id="enrollment-checksum-info" style="font-size: 0.75rem; font-family: monospace; color: var(--muted); margin-top: 4px; word-break: break-all;"></p>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <label>Configuración JSON de Android Enterprise</label>
+                <textarea id="qr-json-text" readonly style="width: 100%; height: 120px; font-family: monospace; font-size: 0.75rem; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 8px; color: #a5b4fc; resize: none; outline: none;"></textarea>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentApps = [];
+    let qrGenerator = null;
+
+    async function openEnrollmentModal() {
+        document.getElementById('enrollment-modal').style.display = 'flex';
+        await updateEnrollmentQR();
+    }
+
+    function closeEnrollmentModal() {
+        document.getElementById('enrollment-modal').style.display = 'none';
+    }
+
+    async function updateEnrollmentQR() {
+        const ssid = document.getElementById('wifi-ssid').value.trim();
+        const password = document.getElementById('wifi-password').value.trim();
+        const security = document.getElementById('wifi-security').value;
+
+        let url = `/api/enrollment-config?_=${Date.now()}`;
+        if (ssid) {
+            url += `&wifi_ssid=${encodeURIComponent(ssid)}`;
+            if (password) url += `&wifi_password=${encodeURIComponent(password)}`;
+            if (security) url += `&wifi_security=${encodeURIComponent(security)}`;
+        }
+
+        try {
+            const res = await fetch(url);
+            if (!res.ok) {
+                toast("Error al obtener la configuración de enrollment", "err");
+                return;
+            }
+            const data = await res.json();
+            
+            document.getElementById('enrollment-server-info').textContent = `Servidor: ${data.server_url}`;
+            document.getElementById('enrollment-checksum-info').textContent = `Checksum: ${data.signature_checksum.substring(0, 16)}...`;
+            
+            const jsonStr = JSON.stringify(data.qr_json, null, 2);
+            document.getElementById('qr-json-text').value = jsonStr;
+
+            const canvas = document.getElementById('qr-canvas');
+            if (qrGenerator) {
+                qrGenerator.set({ value: JSON.stringify(data.qr_json) });
+            } else {
+                qrGenerator = new QRious({
+                    element: canvas,
+                    value: JSON.stringify(data.qr_json),
+                    size: 240,
+                    level: 'M'
+                });
+            }
+        } catch (e) {
+            console.error("Error updating QR", e);
+            toast("Error al generar el código QR", "err");
+        }
+    }
+
+    // ── Navigation ───────────────────────────────────────────────────────────
+
+    function navigate(page, el) {
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        el.classList.add('active');
+        document.getElementById(`page-${page}`).classList.add('active');
+        if (page === 'apks') {
+            loadApks();
+        } else if (page === 'adb') {
+            refreshAdbDevices();
+        }
+    }
+
+
+    // ── Toast ────────────────────────────────────────────────────────────────
+
+    function toast(msg, type = 'ok') {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.className = `show ${type}`;
+        setTimeout(() => t.className = '', 3000);
+    }
+    function escapeHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function updateServerStatus(counts = {}) {
+        const badge = document.getElementById('server-badge');
+        if (!badge) return;
+        const host = window.location.host || 'localhost';
+        const connected = counts.connected ?? 0;
+        const total = counts.total ?? 0;
+        const blocked = counts.blocked ?? 0;
+        badge.innerHTML = `<span class="dot"></span>Servidor activo · ${host} · ${connected}/${total} en línea · ${blocked} bloqueados`;
+    }
+
+    function updateServerStatus(counts = {}) {
+        const badge = document.getElementById('server-badge');
+        if (!badge) return;
+        const host = window.location.host || 'localhost';
+        const connected = counts.connected ?? 0;
+        const total = counts.total ?? 0;
+        const blocked = counts.blocked ?? 0;
+        badge.innerHTML = `<span class="dot"></span>Servidor activo · ${host} · ${connected}/${total} en línea · ${blocked} bloqueados`;
+    }
+    // ── Devices & unlock requests ─────────────────────────────────────────────
+
+    async function loadDevices() {
+        try {
+            const res = await fetch(`/api/devices?_=${Date.now()}`);
+            const data = await res.json();
+
+            const grid = document.getElementById('device-grid');
+            const unlockSection = document.getElementById('unlock-section');
+            const unlockList = document.getElementById('unlock-list');
+            const summaryText = document.getElementById('device-summary-text');
+
+            if (!data.devices || data.devices.length === 0) {
+                grid.innerHTML = `<div class="empty"><div class="icon">📡</div><p>Esperando conexiones de dispositivos Android...</p></div>`;
+                updateServerStatus({connected: 0, total: 0, blocked: 0});
+                if (summaryText) summaryText.textContent = 'No hay dispositivos conectados todavía.';
+                } else {
+                const connected = data.devices.filter(d => d.status === 'connected').length;
+                const blocked = data.devices.filter(d => d.blocked).length;
+                updateServerStatus({connected, total: data.devices.length, blocked});
+                if (summaryText) summaryText.textContent = `Dispositivos en línea: ${connected} de ${data.devices.length}. Bloqueados: ${blocked}.`;
+                grid.innerHTML = data.devices.map(d => {
+                    const displayName = escapeHtml(d.name || 'Dispositivo sin nombre');
+                    const connectedAt = d.connected_at ? new Date(d.connected_at * 1000).toLocaleString() : '';
+                    const safeId = encodeURIComponent(d.id);
+                    return `
+                        <div class="device-card" data-device-id="${safeId}">
+                            <div class="device-header">
+                                <div>
+                                    <div class="device-name">
+                                        <span class="device-name-display" onclick="startRename(this.closest('.device-card').dataset.deviceId, this)" title="Click para renombrar">
+                                            📱 ${displayName}
+                                            <span class="edit-hint">✏️</span>
+                                        </span>
+                                    </div>
+                                    <div class="device-id">${escapeHtml(d.id)}</div>
+                                </div>
+                                <div style="display:flex;gap:8px;align-items:center;">
+                                    <span class="badge ${d.status === 'connected' ? 'badge-green' : 'badge-red'}"><span style="width:6px;height:6px;background:currentColor;border-radius:50%;display:inline-block"></span> ${d.status === 'connected' ? 'En línea' : 'Offline'}</span>
+                                    <span class="badge ${d.blocked ? 'badge-red' : 'badge-yellow'}">${d.blocked ? 'Bloqueado' : 'Sin bloqueo'}</span>
+                                </div>
+                            </div>
+                            ${connectedAt ? `<div class="device-time">Conectado: ${connectedAt}</div>` : ''}
+                            ${d.clear_data_password ? `<div style="font-size:0.72rem; color:var(--warning); margin-bottom:10px;">🔑 Clave datos: <code>${escapeHtml(d.clear_data_password)}</code></div>` : ''}
+                            <div class="device-actions">
+                                ${d.status === 'connected' ? `<button class="btn btn-warning btn-sm" onclick="${d.blocked ? `unblockDevice('${safeId}')` : `blockDevice('${safeId}')`}">${d.blocked ? '✅ Desbloquear' : '🚫 Bloquear remoto'}</button>` : ''}
+                                <button class="btn btn-primary btn-sm" onclick="openDeviceAppsModal('${safeId}')" title="Ver y gestionar aplicaciones de este dispositivo">📱 Apps</button>
+                                <button class="btn btn-ghost btn-sm" onclick="changeDeviceClearPass('${safeId}', '${escapeHtml(d.clear_data_password || '')}')" title="Configurar contraseña de borrado para este dispositivo">🔑 Clave Datos</button>
+                                <button class="btn btn-danger btn-sm" onclick="removeDevice(this.closest('.device-card').dataset.deviceId)">🗑️ Eliminar</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            // Render pending unlocks
+            if (!data.pendingUnlocks || data.pendingUnlocks.length === 0) {
+                unlockSection.style.display = 'none';
+            } else {
+                unlockSection.style.display = 'block';
+                unlockList.innerHTML = data.pendingUnlocks.map(req => {
+                    const t = new Date(req.timestamp * 1000).toLocaleTimeString();
+                    const devName = escapeHtml(data.device_names?.[req.device_id] || req.device_id);
+                    const safeReqId = encodeURIComponent(req.device_id);
+                    return `
+                        <div class="unlock-card">
+                            <div class="unlock-info">
+                                <h4>🔓 Solicitud de desbloqueo</h4>
+                                <p>${devName} · <code>${escapeHtml(req.device_id)}</code> · ${t}</p>
+                            </div>
+                            <div class="unlock-actions">
+                                <input type="password" class="unlock-pass" id="pass-${safeReqId}" placeholder="Contraseña" />
+                                <button class="btn btn-success btn-sm" onclick="approveUnlock('${safeReqId}')">✅</button>
+                                <button class="btn btn-danger btn-sm" onclick="denyUnlock('${safeReqId}')">✖</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            const blockSection = document.getElementById('block-section');
+            const blockList = document.getElementById('block-list');
+            if (!data.pendingBlockRequests || data.pendingBlockRequests.length === 0) {
+                blockSection.style.display = 'none';
+            } else {
+                blockSection.style.display = 'block';
+                blockList.innerHTML = data.pendingBlockRequests.map(req => {
+                    const t = new Date(req.timestamp * 1000).toLocaleTimeString();
+                    const devName = escapeHtml(data.device_names?.[req.device_id] || req.device_id);
+                    return `
+                        <div class="unlock-card">
+                            <div class="unlock-info">
+                                <h4>🚫 Solicitud de bloqueo remoto</h4>
+                                <p>${devName} · <code>${escapeHtml(req.device_id)}</code> · ${t}</p>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        } catch (e) {
+            console.error('Error loading devices:', e);
+        }
+    }
+
+    // ── Rename device ────────────────────────────────────────────────────────
+
+    function startRename(encodedDeviceId, el) {
+        const deviceId = decodeURIComponent(encodedDeviceId);
+        const parent = el.parentElement;
+        const currentName = el.textContent.replace('📱 ', '').replace('✏️', '').trim();
+        const isDefaultName = currentName === 'Dispositivo sin nombre';
+        const safeId = encodeURIComponent(deviceId);
+
+        parent.innerHTML = `
+            <div class="name-edit">
+                <input type="text" id="rename-input-${safeId}"
+                    value="${isDefaultName ? '' : currentName}"
+                    placeholder="Nombre del dispositivo"
+                    onkeydown="if(event.key==='Enter')saveRename('${safeId}');if(event.key==='Escape')loadDevices();"
+                    autofocus />
+                <button class="btn btn-primary btn-sm" onclick="saveRename('${safeId}')">💾</button>
+                <button class="btn btn-ghost btn-sm" onclick="loadDevices()">✖</button>
+            </div>
+        `;
+        document.getElementById(`rename-input-${safeId}`)?.focus();
+    }
+
+    async function saveRename(encodedDeviceId) {
+        const deviceId = decodeURIComponent(encodedDeviceId);
+        const input = document.getElementById(`rename-input-${encodedDeviceId}`);
+        const name = input?.value?.trim() || '';
+
+        try {
+            const res = await fetch('/api/device/rename', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({device_id: deviceId, name: name})
+            });
+            if (res.ok) {
+                toast(name ? `📛 Dispositivo renombrado a "${name}"` : '📛 Nombre eliminado');
+                loadDevices();
+            } else {
+                toast('Error al renombrar', 'err');
+            }
+        } catch(e) { toast('Error de conexión', 'err'); }
+    }
+
+    // ── Remove / Clear ───────────────────────────────────────────────────────
+
+    async function removeDevice(encodedDeviceId) {
+        const deviceId = decodeURIComponent(encodedDeviceId);
+        if (!confirm(`¿Desconectar y eliminar este dispositivo?\n${deviceId}`)) return;
+        
+        const pin = prompt('Por favor, ingresa el PIN/Contraseña de administrador para confirmar la eliminación:');
+        if (pin === null) return; // cancelado
+        if (!pin.trim()) return toast('El PIN no puede estar vacío', 'err');
+        
+        try {
+            const res = await fetch(`/api/device/${encodedDeviceId}?pin=${encodeURIComponent(pin.trim())}`, {method: 'DELETE'});
+            if (res.ok) {
+                toast('🗑️ Dispositivo eliminado');
+                loadDevices();
+            } else {
+                const data = await res.json();
+                toast(data.error || 'Error al eliminar el dispositivo', 'err');
+            }
+        } catch(e) { toast('Error de conexión', 'err'); }
+    }
+
+    async function clearAllDevices() {
+        if (!confirm('¿Desconectar TODOS los dispositivos y limpiar registros?')) return;
+        
+        const pin = prompt('Por favor, ingresa el PIN/Contraseña de administrador para confirmar la eliminación de TODOS los dispositivos:');
+        if (pin === null) return; // cancelado
+        if (!pin.trim()) return toast('El PIN no puede estar vacío', 'err');
+        
+        try {
+            const res = await fetch(`/api/devices/all?pin=${encodeURIComponent(pin.trim())}`, {method: 'DELETE'});
+            if (res.ok) {
+                toast('🧹 Todos los dispositivos desconectados');
+                loadDevices();
+            } else {
+                const data = await res.json();
+                toast(data.error || 'Error al limpiar dispositivos', 'err');
+            }
+        } catch(e) { toast('Error de conexión', 'err'); }
+    }
+
+    async function syncAllDevices() {
+        try {
+            const res = await fetch('/api/devices/sync', {method: 'POST'});
+            if (res.ok) {
+                toast('🔄 Solicitud de sincronización enviada a todos los dispositivos');
+            } else {
+                toast('Error al enviar sincronización', 'err');
+            }
+        } catch(e) { toast('Error de conexión', 'err'); }
+    }
+
+
+    // ── Unlock ───────────────────────────────────────────────────────────────
+
+    async function approveUnlock(encodedDeviceId) {
+        const deviceId = decodeURIComponent(encodedDeviceId);
+        const pass = document.getElementById(`pass-${encodedDeviceId}`)?.value;
+        if (!pass) return toast('Ingresa la contraseña para aprobar', 'err');
+
+        try {
+            const res = await fetch('/api/unlock', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({device_id: deviceId, password: pass, approve: true})
+            });
+            const data = await res.json();
+            if (res.ok) {
+                toast('✅ Desbloqueo aprobado y enviado al dispositivo');
+                loadDevices();
+            } else {
+                toast(data.error || 'Error al aprobar', 'err');
+            }
+        } catch(e) { toast('Error de conexión', 'err'); }
+    }
+
+    async function denyUnlock(encodedDeviceId) {
+        const deviceId = decodeURIComponent(encodedDeviceId);
+        try {
+            await fetch('/api/unlock', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({device_id: deviceId, password: '', approve: false})
+            });
+            toast('🚫 Acceso denegado al dispositivo');
+            loadDevices();
+        } catch(e) { toast('Error de conexión', 'err'); }
+    }
+
+    async function blockDevice(encodedDeviceId) {
+        const deviceId = decodeURIComponent(encodedDeviceId);
+        try {
+            const res = await fetch('/api/block', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({device_id: deviceId})
+            });
+            const data = await res.json();
+            if (res.ok) {
+                toast('🚫 Enviando bloqueo remoto al dispositivo');
+                loadDevices();
+            } else {
+                toast(data.error || 'Error al bloquear el dispositivo', 'err');
+            }
+        } catch(e) { toast('Error de conexión', 'err'); }
+    }
+
+    async function unblockDevice(encodedDeviceId) {
+        const deviceId = decodeURIComponent(encodedDeviceId);
+        try {
+            const res = await fetch('/api/unblock', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({device_id: deviceId})
+            });
+            const data = await res.json();
+            if (res.ok) {
+                toast('✅ Enviando desbloqueo al dispositivo');
+                loadDevices();
+            } else {
+                toast(data.error || 'Error al desbloquear el dispositivo', 'err');
+            }
+        } catch(e) { toast('Error de conexión', 'err'); }
+    }
+
+    // ── Whitelist ─────────────────────────────────────────────────────────────
+
+    async function loadConfig() {
+        const res = await fetch(`/api/config?_=${Date.now()}`);
+        const data = await res.json();
+        currentApps = data.allowed_apps || [];
+        document.getElementById('toggle-datetime').checked = data.block_datetime;
+        document.getElementById('toggle-gps').checked = data.block_gps;
+        renderChips();
+
+        const globalClearPassEl = document.getElementById('global-clear-pass');
+        if (globalClearPassEl) {
+            globalClearPassEl.value = data.clear_data_password || '';
+        }
+
+        const ab = document.getElementById('always-blocked-chips');
+        ab.innerHTML = (data.always_blocked || []).map(p => `<div class="chip" style="border-color:rgba(239,68,68,0.3);color:#fca5a5;">${p}</div>`).join('');
+
+        const aa = document.getElementById('always-allowed-chips');
+        aa.innerHTML = (data.always_allowed || []).map(p => `<div class="chip" style="border-color:rgba(16,185,129,0.3);color:#6ee7b7;">${p}</div>`).join('');
+    }
+
+    function renderChips() {
+        const area = document.getElementById('app-chips');
+        if (currentApps.length === 0) {
+            area.innerHTML = '<span style="color:var(--muted);font-size:0.82rem;">Sin apps permitidas todavía. Agrega paquetes arriba.</span>';
+            return;
+        }
+        area.innerHTML = currentApps.map((pkg, i) => `
+            <div class="chip">
+                ${pkg}
+                <span class="chip-x" onclick="removeApp(${i})">×</span>
+            </div>
+        `).join('');
+    }
+
+    function addApp() {
+        const input = document.getElementById('pkg-input');
+        const val = input.value.trim();
+        if (!val) return;
+        addPreset(val);
+        input.value = '';
+    }
+
+    function addPreset(pkg) {
+        if (!pkg) return;
+        if (currentApps.includes(pkg)) { toast('Ya está en la lista', 'err'); return; }
+        currentApps.push(pkg);
+        renderChips();
+    }
+
+    function removeApp(i) {
+        currentApps.splice(i, 1);
+        renderChips();
+    }
+
+    async function saveWhitelist() {
+        try {
+            const res = await fetch('/api/config', {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({allowed_apps: currentApps})
+            });
+            if (res.ok) toast('✅ Lista blanca guardada y enviada a los dispositivos');
+            else toast('Error al guardar', 'err');
+        } catch(e) { toast('Error de conexión', 'err'); }
+    }
+
+    // ── Rules ─────────────────────────────────────────────────────────────────
+
+    async function saveRules() {
+        const block_gps = document.getElementById('toggle-gps').checked;
+        const block_datetime = document.getElementById('toggle-datetime').checked;
+        try {
+            const res = await fetch('/api/config', {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({block_gps, block_datetime})
+            });
+            if (res.ok) toast('✅ Reglas actualizadas');
+            else toast('Error al guardar', 'err');
+        } catch(e) { toast('Error de conexión', 'err'); }
+    }
+
+    // ── Password ──────────────────────────────────────────────────────────────
+
+    async function savePassword() {
+        const pass = document.getElementById('new-pass').value;
+        const confirm = document.getElementById('confirm-pass').value;
+        if (!pass) return toast('Ingresa una contraseña', 'err');
+        if (pass !== confirm) return toast('Las contraseñas no coinciden', 'err');
+        try {
+            const res = await fetch('/api/config', {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({master_password: pass})
+            });
+            if (res.ok) {
+                toast('🔑 Contraseña actualizada correctamente');
+                document.getElementById('new-pass').value = '';
+                document.getElementById('confirm-pass').value = '';
+            } else {
+                toast('Error al guardar contraseña', 'err');
+            }
+        } catch(e) { toast('Error de conexión', 'err'); }
+    }
+
+    async function saveGlobalClearDataPassword() {
+        const pass = document.getElementById('global-clear-pass').value.trim();
+        if (!pass) return toast('Ingresa una contraseña de borrado', 'err');
+        try {
+            const res = await fetch('/api/config', {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({clear_data_password: pass})
+            });
+            if (res.ok) {
+                toast('🔑 Contraseña global de borrado actualizada');
+            } else {
+                toast('Error al guardar contraseña de borrado', 'err');
+            }
+        } catch(e) { toast('Error de conexión', 'err'); }
+    }
+
+    async function changeDeviceClearPass(encodedDeviceId, currentPass) {
+        const deviceId = decodeURIComponent(encodedDeviceId);
+        const newPass = prompt(`Establecer contraseña de borrado de datos para el dispositivo ${deviceId}:\n(Dejar en blanco para usar la global)`, currentPass);
+        if (newPass === null) return; // cancel
+        
+        try {
+            const res = await fetch('/api/device/clear-data-password', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({device_id: deviceId, password: newPass.trim()})
+            });
+            if (res.ok) {
+                toast(newPass.trim() ? '🔑 Contraseña personalizada guardada' : '🔑 Contraseña restablecida a global');
+                loadDevices();
+            } else {
+                toast('Error al guardar contraseña', 'err');
+            }
+        } catch(e) { toast('Error de conexión', 'err'); }
+    }
+
+    async function searchAppsStore() {
+        const queryInput = document.getElementById('apk-search-query');
+        const query = queryInput.value.trim();
+        if (!query) {
+            toast('Ingresa un término de búsqueda (ej. Waze)', 'err');
+            return;
+        }
+
+        const resultsContainer = document.getElementById('apk-search-results');
+        const loadingText = document.getElementById('search-loading-text');
+
+        resultsContainer.innerHTML = '';
+        loadingText.style.display = 'block';
+        resultsContainer.style.marginTop = '20px'; // add spacing when search results are populated
+
+        try {
+            const res = await fetch(`/api/apks/search?q=${encodeURIComponent(query)}`);
+            const data = await res.json();
+            
+            if (!data.apps || data.apps.length === 0) {
+                resultsContainer.innerHTML = `
+                    <div style="grid-column: 1/-1; text-align: center; padding: 20px; color: var(--muted); font-size: 0.85rem;">
+                        No se encontraron aplicaciones para "${escapeHtml(query)}"
+                    </div>
+                `;
+                return;
+            }
+
+            resultsContainer.innerHTML = data.apps.map(app => {
+                const iconUrl = app.icon || 'https://raw.githubusercontent.com/Aptoide/aptoide-logo/master/aptoide_logo.png';
+                const appName = escapeHtml(app.name);
+                const pkgName = escapeHtml(app.packageName);
+                const version = escapeHtml(app.version);
+                const sizeMb = (app.size / (1024 * 1024)).toFixed(1);
+
+                return `
+                    <div class="device-card" style="display: flex; flex-direction: column; justify-content: space-between; align-items: center; text-align: center; padding: 16px; border-radius: 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--border);">
+                        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                            <img src="${iconUrl}" style="width: 52px; height: 52px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); object-fit: cover;" onerror="this.src='https://raw.githubusercontent.com/Aptoide/aptoide-logo/master/aptoide_logo.png'" />
+                            <div style="font-weight: 700; font-size: 0.88rem; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; height: 36px; line-height: 18px;">${appName}</div>
+                            <div style="font-size: 0.72rem; color: var(--muted); font-family: monospace; word-break: break-all;">${pkgName}</div>
+                            <div style="font-size: 0.75rem; color: var(--muted); margin-top: 4px;">v${version} · ${sizeMb} MB</div>
+                        </div>
+                        <button class="btn btn-primary btn-sm" style="margin-top: 14px; width: 100%; justify-content: center;" onclick="importAppByPackageName('${pkgName}')">📥 Importar</button>
+                    </div>
+                `;
+            }).join('');
+
+        } catch (e) {
+            toast('Error al buscar aplicaciones', 'err');
+        } finally {
+            loadingText.style.display = 'none';
+        }
+    }
+
+    async function importAppByPackageName(packageName) {
+        const urlInput = document.getElementById('apk-url-input');
+        if (urlInput) {
+            urlInput.value = packageName;
+            await downloadApkFromUrl();
+        }
+    }
+
+    async function downloadApkFromUrl() {
+        const input = document.getElementById('apk-url-input');
+        const urlOrPkg = input.value.trim();
+        if (!urlOrPkg) {
+            toast('Ingresa una URL de Google Play o un nombre de paquete', 'err');
+            return;
+        }
+
+        const btn = document.getElementById('btn-download-apk-url');
+        const progressContainer = document.getElementById('download-progress-container');
+        const progressText = document.getElementById('download-progress-text');
+
+        btn.disabled = true;
+        progressContainer.style.display = 'block';
+        progressText.innerHTML = '⏳ Descargando e importando APK desde el servidor espejo público (esto puede tomar un momento)...';
+
+        try {
+            const res = await fetch('/api/apks/download-url', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ url: urlOrPkg })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                toast(`✅ APK importada correctamente: ${data.packageName}`);
+                input.value = '';
+                loadApks();
+            } else {
+                toast(data.error || 'Error al descargar e importar la APK', 'err');
+            }
+        } catch (e) {
+            toast('Error de conexión con el servidor', 'err');
+        } finally {
+            btn.disabled = false;
+            progressContainer.style.display = 'none';
+        }
+    }
+
+    // ── APK Management ────────────────────────────────────────────────────────
+    let selectedApkFile = null;
+
+    function handleApkFileSelected(input) {
+        const file = input.files[0];
+        const btn = document.getElementById('btn-upload-apk');
+        const nameLabel = document.getElementById('apk-file-name');
+        if (file) {
+            if (!file.name.endsWith('.apk')) {
+                toast('Solo se permiten archivos .apk', 'err');
+                input.value = '';
+                selectedApkFile = null;
+                btn.disabled = true;
+                nameLabel.textContent = 'Ningún archivo seleccionado';
+                return;
+            }
+            selectedApkFile = file;
+            btn.disabled = false;
+            nameLabel.textContent = file.name;
+        } else {
+            selectedApkFile = null;
+            btn.disabled = true;
+            nameLabel.textContent = 'Ningún archivo seleccionado';
+        }
+    }
+
+    async function uploadApkFile() {
+        if (!selectedApkFile) return;
+        
+        const btn = document.getElementById('btn-upload-apk');
+        const progressContainer = document.getElementById('upload-progress-container');
+        const progressBar = document.getElementById('upload-progress-bar');
+        
+        btn.disabled = true;
+        progressContainer.style.display = 'block';
+        progressBar.style.width = '0%';
+        
+        const formData = new FormData();
+        formData.append('file', selectedApkFile);
+        
+        try {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/apks/upload', true);
+            
+            xhr.upload.onprogress = function(e) {
+                if (e.lengthComputable) {
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    progressBar.style.width = `${percent}%`;
+                }
+            };
+            
+            xhr.onload = function() {
+                btn.disabled = false;
+                progressContainer.style.display = 'none';
+                document.getElementById('apk-file-input').value = '';
+                document.getElementById('apk-file-name').textContent = 'Ningún archivo seleccionado';
+                selectedApkFile = null;
+                
+                if (xhr.status === 200) {
+                    toast('✅ APK subida correctamente');
+                    loadApks();
+                } else {
+                    let err = 'Error al subir';
+                    try {
+                        const res = JSON.parse(xhr.responseText);
+                        err = res.error || err;
+                    } catch(e) {}
+                    toast(err, 'err');
+                }
+            };
+            
+            xhr.onerror = function() {
+                btn.disabled = false;
+                progressContainer.style.display = 'none';
+                toast('Error de conexión', 'err');
+            };
+            
+            xhr.send(formData);
+        } catch(e) {
+            btn.disabled = false;
+            progressContainer.style.display = 'none';
+            toast('Error al iniciar la subida', 'err');
+        }
+    }
+
+    async function loadApks() {
+        try {
+            const res = await fetch(`/api/apks?_=${Date.now()}`);
+            const data = await res.json();
+            const list = document.getElementById('apk-list');
+            
+            if (!data.apks || data.apks.length === 0) {
+                list.innerHTML = `
+                    <div class="empty">
+                        <div class="icon">📦</div>
+                        <p>No hay archivos APK en el servidor. Sube uno arriba.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            list.innerHTML = data.apks.map(apk => {
+                const displayName = escapeHtml(apk.packageName);
+                const safeFilename = encodeURIComponent(apk.filename);
+                return `
+                    <div class="device-card">
+                        <div class="device-header">
+                            <div>
+                                <div class="device-name">📦 ${displayName}</div>
+                                <div class="device-id" style="font-size:0.75rem;">Archivo: ${escapeHtml(apk.filename)}</div>
+                            </div>
+                        </div>
+                        <div class="device-actions" style="margin-top: 16px;">
+                            <a href="${escapeHtml(apk.url)}" class="btn btn-ghost btn-sm" download style="text-decoration:none;">📥 Descargar</a>
+                            <button class="btn btn-danger btn-sm" onclick="deleteApk('${safeFilename}')">🗑️ Eliminar</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        } catch (e) {
+            console.error('Error loading APKs:', e);
+        }
+    }
+
+    async function deleteApk(filename) {
+        if (!confirm(`¿Eliminar este APK del servidor?\n${decodeURIComponent(filename)}`)) return;
+        try {
+            const res = await fetch(`/api/apks/${filename}`, { method: 'DELETE' });
+            if (res.ok) {
+                toast('🗑️ APK eliminada');
+                loadApks();
+            } else {
+                toast('Error al eliminar', 'err');
+            }
+        } catch(e) { toast('Error de conexión', 'err'); }
+    }
+
+    // ── Device Apps Modal management ──────────────────────────────────────────
+    let currentModalDeviceId = '';
+    let currentModalApps = [];
+    let currentModalAllowedApps = null;
+    let globalAllowedApps = [];
+
+    async function openDeviceAppsModal(encodedDeviceId) {
+        const deviceId = decodeURIComponent(encodedDeviceId);
+        currentModalDeviceId = deviceId;
+        
+        document.getElementById('apps-modal').style.display = 'flex';
+        document.getElementById('apps-modal-title').textContent = `Aplicaciones de ${deviceId}`;
+        document.getElementById('apps-modal-subtitle').textContent = 'Cargando aplicaciones...';
+        document.getElementById('apps-modal-list').innerHTML = '<div class="empty"><p>Cargando lista de aplicaciones...</p></div>';
+        document.getElementById('apps-search').value = '';
+
+        try {
+            const configRes = await fetch(`/api/config?_=${Date.now()}`);
+            const configData = await configRes.json();
+            globalAllowedApps = configData.allowed_apps || [];
+
+            const devicesRes = await fetch(`/api/devices?_=${Date.now()}`);
+            const devicesData = await devicesRes.json();
+            const device = devicesData.devices.find(d => d.id === deviceId);
+            const deviceName = devicesData.device_names?.[deviceId] || deviceId;
+            
+            document.getElementById('apps-modal-title').textContent = `Aplicaciones de ${escapeHtml(deviceName)}`;
+
+            if (!device) {
+                document.getElementById('apps-modal-list').innerHTML = '<div class="empty"><p>Error: Dispositivo no encontrado.</p></div>';
+                return;
+            }
+
+            currentModalApps = device.installed_apps || [];
+            const isUsingCustom = device.allowed_apps !== undefined && device.allowed_apps !== null;
+            currentModalAllowedApps = isUsingCustom ? device.allowed_apps : null;
+            
+            document.getElementById('btn-reset-device-apps').style.display = isUsingCustom ? 'block' : 'none';
+            document.getElementById('apps-modal-subtitle').textContent = isUsingCustom 
+                ? '⚙️ Usando lista personalizada para este dispositivo.' 
+                : '🌍 Usando lista blanca global (heredada).';
+
+            renderDeviceApps();
+        } catch (e) {
+            document.getElementById('apps-modal-list').innerHTML = '<div class="empty"><p>Error al cargar aplicaciones.</p></div>';
+        }
+    }
+
+    function closeDeviceAppsModal() {
+        document.getElementById('apps-modal').style.display = 'none';
+    }
+
+    function renderDeviceApps() {
+        const listEl = document.getElementById('apps-modal-list');
+        const query = document.getElementById('apps-search').value.toLowerCase().trim();
+        
+        const filtered = currentModalApps.filter(app => {
+            return app.label.toLowerCase().includes(query) || app.packageName.toLowerCase().includes(query);
+        });
+
+        if (filtered.length === 0) {
+            listEl.innerHTML = '<div class="empty"><p>No se encontraron aplicaciones.</p></div>';
+            return;
+        }
+
+        listEl.innerHTML = filtered.map(app => {
+            const pkg = app.packageName;
+            const label = escapeHtml(app.label);
+            const isSystem = app.isSystem;
+            
+            let allowed = false;
+            if (currentModalAllowedApps !== null) {
+                allowed = currentModalAllowedApps.includes(pkg);
+            } else {
+                allowed = globalAllowedApps.includes(pkg);
+            }
+
+            const badge = isSystem 
+                ? '<span class="badge" style="background:rgba(255,255,255,0.05);color:var(--muted);">Sistema</span>' 
+                : '<span class="badge" style="background:rgba(99,102,241,0.1);color:#a5b4fc;">Terceros</span>';
+
+            const safePkg = escapeHtml(pkg);
+            
+            return `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:12px; border-bottom:1px solid var(--border); gap:12px;">
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-weight:600; font-size:0.9rem; display:flex; align-items:center; gap:8px;">
+                           ${label} ${badge}
+                        </div>
+                        <div style="font-size:0.75rem; color:var(--muted); font-family:monospace; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">
+                           ${safePkg}
+                        </div>
+                    </div>
+                    <div style="flex:0;">
+                        <label class="switch">
+                            <input type="checkbox" ${allowed ? 'checked' : ''} onchange="toggleDeviceApp('${safePkg}', this.checked)">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function filterDeviceApps() {
+        renderDeviceApps();
+    }
+
+    async function toggleDeviceApp(pkg, allowed) {
+        try {
+            const res = await fetch('/api/device/app-toggle', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    device_id: currentModalDeviceId,
+                    package_name: pkg,
+                    allowed: allowed
+                })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                currentModalAllowedApps = data.allowed_apps;
+                document.getElementById('btn-reset-device-apps').style.display = 'block';
+                document.getElementById('apps-modal-subtitle').textContent = '⚙️ Usando lista personalizada para este dispositivo.';
+                toast(allowed ? `✅ App ${pkg} permitida` : `🚫 App ${pkg} bloqueada`);
+                loadDevices();
+            } else {
+                toast('Error al actualizar permisos de app', 'err');
+            }
+        } catch (e) {
+            toast('Error de conexión', 'err');
+        }
+    }
+
+    async function resetDeviceApps() {
+        if (!confirm('¿Deseas restablecer las aplicaciones de este dispositivo para que use la lista blanca global?')) return;
+        try {
+            const res = await fetch('/api/device/apps-reset', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    device_id: currentModalDeviceId
+                })
+            });
+            if (res.ok) {
+                currentModalAllowedApps = null;
+                document.getElementById('btn-reset-device-apps').style.display = 'none';
+                document.getElementById('apps-modal-subtitle').textContent = '🌍 Usando lista blanca global (heredada).';
+                renderDeviceApps();
+                toast('🔄 Restablecido a lista blanca global');
+                loadDevices();
+            } else {
+                toast('Error al restablecer', 'err');
+            }
+        } catch (e) {
+            toast('Error de conexión', 'err');
+        }
+    }
+
+    // ── Init ──────────────────────────────────────────────────────────────────
+
+    loadConfig();
+    loadDevices();
+    setInterval(loadDevices, 5000); // Reduced from 3s to 5s
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('pkg-input')?.addEventListener('keydown', e => {
+            if (e.key === 'Enter') addApp();
+        });
+        document.getElementById('apk-url-input')?.addEventListener('keydown', e => {
+            if (e.key === 'Enter') downloadApkFromUrl();
+        });
+    });
+
+    // ── ADB Installer ────────────────────────────────────────────────────────
+    let adbPollInterval = null;
+
+    async function refreshAdbDevices() {
+        const container = document.getElementById('adb-devices-container');
+        container.innerHTML = '<div class="empty" style="padding: 24px;"><p>Buscando dispositivos conectados por ADB...</p></div>';
+        document.getElementById('adb-setup-card').style.display = 'none';
+
+        try {
+            const res = await fetch(`/api/adb/devices?_=${Date.now()}`);
+            const data = await res.json();
+            
+            if (res.ok && data.devices && data.devices.length > 0) {
+                container.innerHTML = data.devices.map(dev => {
+                    const statusClass = dev.status === 'device' ? 'badge-green' : 'badge-red';
+                    const statusText = dev.status === 'device' ? 'Listo (Autorizado)' : 'No autorizado / Offline';
+                    return `
+                        <div class="device-card" style="background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between;">
+                            <div>
+                                <div style="font-weight: 700; font-size: 0.9rem; margin-bottom: 4px;">📱 ${escapeHtml(dev.model)}</div>
+                                <div style="font-family: monospace; font-size: 0.72rem; color: var(--muted); margin-bottom: 12px;">ID: ${escapeHtml(dev.id)}</div>
+                            </div>
+                            <div style="display: flex; align-items: center; justify-content: space-between;">
+                                <span class="badge ${statusClass}">${statusText}</span>
+                                ${dev.status === 'device' ? `<button class="btn btn-primary btn-sm" onclick="selectAdbDevice('${escapeHtml(dev.id)}')">Seleccionar</button>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                container.innerHTML = `
+                    <div class="empty" style="padding: 24px;">
+                        <div class="icon">🔌</div>
+                        <p>No se encontraron dispositivos conectados por USB con depuración activa.</p>
+                        <p style="font-size:0.75rem; margin-top:6px; color:var(--muted);">Asegúrate de conectar el teléfono, habilitar la 'Depuración por USB' y autorizar la huella RSA en la pantalla.</p>
+                    </div>
+                `;
+            }
+        } catch (e) {
+            console.error('Error refreshing ADB devices:', e);
+            container.innerHTML = '<div class="empty" style="padding: 24px;"><p>Error de red al consultar dispositivos.</p></div>';
+        }
+    }
+
+    function selectAdbDevice(deviceId) {
+        document.getElementById('selected-adb-device-id').value = deviceId;
+        document.getElementById('adb-setup-card').style.display = 'block';
+        document.getElementById('adb-progress-card').style.display = 'none';
+        document.getElementById('adb-setup-card').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    async function startAdbProvision() {
+        const deviceId = document.getElementById('selected-adb-device-id').value;
+        const installLucema = document.getElementById('adb-chk-lucema').checked;
+        const installDefaults = document.getElementById('adb-chk-defaults').checked;
+
+        if (!deviceId) {
+            toast('Por favor, selecciona un dispositivo primero', 'err');
+            return;
+        }
+
+        document.getElementById('btn-start-adb-provision').disabled = true;
+        document.getElementById('adb-progress-card').style.display = 'block';
+        document.getElementById('adb-progress-card').scrollIntoView({ behavior: 'smooth' });
+        
+        const consoleEl = document.getElementById('adb-console-log');
+        consoleEl.textContent = 'Enviando comando de aprovisionamiento...';
+
+        try {
+            const res = await fetch('/api/adb/provision', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    device_id: deviceId,
+                    install_lucema: installLucema,
+                    install_defaults: installDefaults
+                })
+            });
+
+            if (res.ok) {
+                toast('⚡ Proceso ADB iniciado');
+                pollAdbStatus();
+            } else {
+                const data = await res.json();
+                toast(data.error || 'Error al iniciar aprovisionamiento', 'err');
+                document.getElementById('btn-start-adb-provision').disabled = false;
+            }
+        } catch (e) {
+            toast('Error de conexión', 'err');
+            document.getElementById('btn-start-adb-provision').disabled = false;
+        }
+    }
+
+    function pollAdbStatus() {
+        if (adbPollInterval) clearInterval(adbPollInterval);
+        
+        const dot = document.getElementById('adb-progress-dot');
+        const statusText = document.getElementById('adb-progress-status-text');
+        const consoleEl = document.getElementById('adb-console-log');
+        
+        adbPollInterval = setInterval(async () => {
+            try {
+                const res = await fetch(`/api/adb/status?_=${Date.now()}`);
+                const data = await res.json();
+                
+                if (data.logs && data.logs.length > 0) {
+                    consoleEl.textContent = data.logs.join('\n');
+                    consoleEl.scrollTop = consoleEl.scrollHeight;
+                }
+
+                if (data.status === 'running') {
+                    dot.style.background = 'var(--primary)';
+                    dot.style.animation = 'blink 1.5s infinite';
+                    statusText.textContent = 'Ejecutando instalación y aprovisionamiento...';
+                } else if (data.status === 'success') {
+                    dot.style.background = 'var(--success)';
+                    dot.style.animation = 'none';
+                    statusText.textContent = '¡Aprovisionamiento ADB finalizado con éxito! 🎉';
+                    clearInterval(adbPollInterval);
+                    document.getElementById('btn-start-adb-provision').disabled = false;
+                    toast('✅ Aprovisionamiento completado con éxito!');
+                    loadDevices(); // Refresh main devices grid
+                } else if (data.status === 'error') {
+                    dot.style.background = 'var(--danger)';
+                    dot.style.animation = 'none';
+                    statusText.textContent = 'Error durante el proceso. Revisa la consola arriba.';
+                    clearInterval(adbPollInterval);
+                    document.getElementById('btn-start-adb-provision').disabled = false;
+                    toast('❌ Error en el proceso ADB', 'err');
+                }
+            } catch (e) {
+                console.error('Error polling ADB status:', e);
+            }
+        }, 1000);
+    }
+</script>
+</body>
+</html>

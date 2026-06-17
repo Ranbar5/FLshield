@@ -1,0 +1,36 @@
+# Virtual Environment
+.venv/
+__pycache__/
+*.pyc
+
+# IDEs
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Android Local Gradle / Build
+app/.gradle/
+app/.kotlin/
+app/build/
+app/local.properties
+app/app/build/
+app/app/local.properties
+
+# Server Local State
+backend/devices.json
+backend/config.json
+backend/*.log
+backend/*.txt
+backend/public/apks/*
+!backend/public/apks/com.example.applocker.apk
+!backend/public/apks/qrious.min.js
+!backend/public/apks/index.html
+
+# Backups and large files
+backups/
+*.apk
+*.xapk
+waze_test.apk

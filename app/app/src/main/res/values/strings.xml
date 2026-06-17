@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">FLShield</string>
+    <string name="accessibility_service_description">FLShield monitorea la navegación dentro de Ajustes del sistema para bloquear el acceso a configuraciones restringidas según la política del administrador.</string>
+    <string name="device_admin_label">Administrador FLShield</string>
+    <string name="device_admin_description">Activa FLShield como administrador de dispositivos para habilitar el modo kiosko seguro.</string>
+</resources>
