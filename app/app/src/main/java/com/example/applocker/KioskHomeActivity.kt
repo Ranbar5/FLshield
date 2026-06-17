@@ -594,6 +594,11 @@ class KioskHomeActivity : ComponentActivity() {
 
                             HorizontalDivider(color = Color(0xFF1F2937), modifier = Modifier.padding(vertical = 8.dp))
 
+                            // Font Size Option
+                            FontSizeSliderRow(prefs = prefs)
+
+                            HorizontalDivider(color = Color(0xFF1F2937), modifier = Modifier.padding(vertical = 8.dp))
+
                             // FLShield Settings Option
                             SettingsMenuRow(
                                 icon = "⚙️",
@@ -760,6 +765,58 @@ class KioskHomeActivity : ComponentActivity() {
                     checkedTrackColor = Color(0xFF6366F1),
                     uncheckedThumbColor = Color(0xFF94A3B8),
                     uncheckedTrackColor = Color(0xFF1F2937)
+                )
+            )
+        }
+    }
+
+    @Composable
+    private fun FontSizeSliderRow(prefs: AppLockPreferences) {
+        var fontSize by remember { mutableStateOf(prefs.fontSizeSp.toFloat()) }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(Color(0xFF1F2937), RoundedCornerShape(10.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("🔤", fontSize = 20.sp)
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Tamaño de letra", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Ajustar tamaño del texto", color = Color(0xFF94A3B8), fontSize = 11.sp)
+                }
+                Text(
+                    "${fontSize.toInt()} sp",
+                    color = Color(0xFF6366F1),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            androidx.compose.material3.Slider(
+                value = fontSize,
+                onValueChange = {
+                    fontSize = it
+                    prefs.fontSizeSp = it.toInt()
+                },
+                valueRange = 10f..30f,
+                steps = 19,
+                modifier = Modifier.fillMaxWidth(),
+                colors = androidx.compose.material3.SliderDefaults.colors(
+                    thumbColor = Color(0xFF6366F1),
+                    activeTrackColor = Color(0xFF6366F1),
+                    inactiveTrackColor = Color(0xFF1F2937)
                 )
             )
         }
