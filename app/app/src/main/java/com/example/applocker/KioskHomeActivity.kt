@@ -27,6 +27,8 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
@@ -530,6 +532,7 @@ class KioskHomeActivity : ComponentActivity() {
                         modifier = Modifier
                             .widthIn(max = 400.dp)
                             .fillMaxWidth(0.85f)
+                            .fillMaxHeight(0.85f)
                             .background(Color(0xFF111827), RoundedCornerShape(20.dp))
                             .border(1.dp, Color(0xFF1F2937), RoundedCornerShape(20.dp))
                             .padding(24.dp)
@@ -537,7 +540,9 @@ class KioskHomeActivity : ComponentActivity() {
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState())
                         ) {
                             Text(
                                 text = "Ajustes Rápidos",
