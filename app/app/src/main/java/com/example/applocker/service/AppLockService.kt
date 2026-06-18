@@ -358,9 +358,19 @@ class AppLockService : Service() {
 
     // ── Monitoring loop ───────────────────────────────────────────────────────
 
+    private fun isDeviceLocked(): Boolean {
+        val km = getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+        val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        return km.isKeyguardLocked || !pm.isInteractive
+    }
+
     private suspend fun monitorLoop() {
         while (currentCoroutineContext().isActive) {
             try {
+                if (isDeviceLocked()) {
+                    delay(1000)
+                    continue
+                }
                 val current = getForegroundPackage()
                 if (current != null && current != packageName) {
                     evaluatePackage(current)
@@ -386,6 +396,7 @@ class AppLockService : Service() {
     }
 
     private fun evaluatePackage(pkg: String) {
+        if (isDeviceLocked()) return
         val now = System.currentTimeMillis()
 
         if (lastForeground != null && lastForeground != pkg) {
