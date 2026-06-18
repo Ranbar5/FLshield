@@ -1447,17 +1447,32 @@ async def upload_apk(file: UploadFile = File(...)):
 
 @app.delete("/api/apks/{filename}")
 async def delete_apk(filename: str):
-    """Delete an APK file from the sync folder."""
+    """Delete an APK or XAPK file from the sync folder."""
     safe_filename = os.path.basename(filename)
-    if not safe_filename.endswith(".apk"):
-        safe_filename = f"{safe_filename}.apk"
-    file_path = os.path.join(APKS_DIR, safe_filename)
-    if os.path.exists(file_path):
-        os.remove(file_path)
-        print(f"🗑️ APK eliminada: {safe_filename}")
+    base_name = safe_filename
+    if base_name.endswith(".apk"):
+        base_name = base_name[:-4]
+    elif base_name.endswith(".xapk"):
+        base_name = base_name[:-5]
+        
+    apk_path = os.path.join(APKS_DIR, f"{base_name}.apk")
+    xapk_path = os.path.join(APKS_DIR, f"{base_name}.xapk")
+    
+    deleted = False
+    if os.path.exists(apk_path):
+        os.remove(apk_path)
+        print(f"🗑️ APK eliminada: {base_name}.apk")
+        deleted = True
+    if os.path.exists(xapk_path):
+        os.remove(xapk_path)
+        print(f"🗑️ XAPK eliminada: {base_name}.xapk")
+        deleted = True
+        
+    if deleted:
         await push_config_to_devices()
         return {"success": True}
-    return JSONResponse(status_code=404, content={"error": "Archivo no encontrado"})
+        
+    return JSONResponse(status_code=404, content={"error": f"Archivo no encontrado: {safe_filename}"})
 
 import shutil
 import subprocess
