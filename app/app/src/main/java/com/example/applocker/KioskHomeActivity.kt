@@ -660,6 +660,18 @@ class KioskHomeActivity : ComponentActivity() {
 
                             HorizontalDivider(color = Color(0xFF1F2937), modifier = Modifier.padding(vertical = 8.dp))
 
+                            val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager }
+                            
+                            // Volume Option
+                            VolumeSliderRow(audioManager = audioManager)
+
+                            HorizontalDivider(color = Color(0xFF1F2937), modifier = Modifier.padding(vertical = 8.dp))
+
+                            // Brightness Option
+                            BrightnessSliderRow(context = context)
+
+                            HorizontalDivider(color = Color(0xFF1F2937), modifier = Modifier.padding(vertical = 8.dp))
+
                             // FLShield Settings Option
                             SettingsMenuRow(
                                 icon = "⚙️",
@@ -883,6 +895,173 @@ class KioskHomeActivity : ComponentActivity() {
                     inactiveTrackColor = Color(0xFF1F2937)
                 )
             )
+        }
+    }
+
+    @Composable
+    private fun VolumeSliderRow(
+        audioManager: android.media.AudioManager
+    ) {
+        val maxVol = remember { audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC).toFloat() }
+        var volumeValue by remember {
+            mutableStateOf(audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC).toFloat())
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(Color(0xFF1F2937), RoundedCornerShape(10.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("🔊", fontSize = 20.sp)
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Volumen", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Ajustar volumen de medios", color = Color(0xFF94A3B8), fontSize = 11.sp)
+                }
+                Text(
+                    "${(volumeValue / maxVol * 100).toInt()}%",
+                    color = Color(0xFF6366F1),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            androidx.compose.material3.Slider(
+                value = volumeValue,
+                onValueChange = {
+                    volumeValue = it
+                    audioManager.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, it.toInt(), 0)
+                },
+                valueRange = 0f..maxVol,
+                modifier = Modifier.fillMaxWidth(),
+                colors = androidx.compose.material3.SliderDefaults.colors(
+                    thumbColor = Color(0xFF6366F1),
+                    activeTrackColor = Color(0xFF6366F1),
+                    inactiveTrackColor = Color(0xFF1F2937)
+                )
+            )
+        }
+    }
+
+    @Composable
+    private fun BrightnessSliderRow(
+        context: Context
+    ) {
+        var systemBrightness by remember {
+            val initial = try {
+                android.provider.Settings.System.getInt(context.contentResolver, android.provider.Settings.System.SCREEN_BRIGHTNESS)
+            } catch (_: Exception) {
+                127
+            }
+            mutableStateOf(initial.toFloat() / 255f)
+        }
+
+        var hasWriteSettingsPermission by remember {
+            mutableStateOf(android.provider.Settings.System.canWrite(context))
+        }
+
+        val lifecycleOwner = LocalLifecycleOwner.current
+        DisposableEffect(lifecycleOwner) {
+            val observer = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    hasWriteSettingsPermission = android.provider.Settings.System.canWrite(context)
+                }
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            onDispose {
+                lifecycleOwner.lifecycle.removeObserver(observer)
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(Color(0xFF1F2937), RoundedCornerShape(10.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("💡", fontSize = 20.sp)
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Brillo de pantalla", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Ajustar brillo del panel", color = Color(0xFF94A3B8), fontSize = 11.sp)
+                }
+                Text(
+                    "${(systemBrightness * 100).toInt()}%",
+                    color = Color(0xFF6366F1),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            androidx.compose.material3.Slider(
+                value = systemBrightness,
+                onValueChange = {
+                    systemBrightness = it
+                    if (hasWriteSettingsPermission) {
+                        try {
+                            android.provider.Settings.System.putInt(
+                                context.contentResolver,
+                                android.provider.Settings.System.SCREEN_BRIGHTNESS,
+                                (it * 255).toInt()
+                            )
+                        } catch (_: Exception) {}
+                    }
+                    val window = (context as? android.app.Activity)?.window
+                    if (window != null) {
+                        val layoutParams = window.attributes
+                        layoutParams.screenBrightness = it
+                        window.attributes = layoutParams
+                    }
+                },
+                valueRange = 0.05f..1f,
+                modifier = Modifier.fillMaxWidth(),
+                colors = androidx.compose.material3.SliderDefaults.colors(
+                    thumbColor = Color(0xFF6366F1),
+                    activeTrackColor = Color(0xFF6366F1),
+                    inactiveTrackColor = Color(0xFF1F2937)
+                )
+            )
+            if (!hasWriteSettingsPermission) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Button(
+                    onClick = {
+                        try {
+                            com.example.applocker.service.SettingsMonitorService.allowSettingsNavigation(30_000L)
+                            val intent = Intent(android.provider.Settings.ACTION_MANAGE_WRITE_SETTINGS).apply {
+                                data = android.net.Uri.parse("package:${context.packageName}")
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            context.startActivity(intent)
+                        } catch (_: Exception) {}
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEAB308)),
+                    modifier = Modifier.fillMaxWidth().height(36.dp),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Conceder permiso de brillo 💡", fontSize = 11.sp, color = Color(0xFF0F172A), fontWeight = FontWeight.Bold)
+                }
+            }
         }
     }
 
