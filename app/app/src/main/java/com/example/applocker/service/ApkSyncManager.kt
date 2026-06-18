@@ -184,9 +184,22 @@ class ApkSyncManager(private val context: Context, private val scope: CoroutineS
         }
     }
 
+    private fun isZipFile(file: File): Boolean {
+        return try {
+            java.util.zip.ZipFile(file).use {}
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     private fun installPackage(apkFile: File, serverPackageName: String, version: String, filename: String): Boolean {
         val packageManager = context.packageManager
-        val packageInfo = packageManager.getPackageArchiveInfo(apkFile.absolutePath, 0)
+        val packageInfo = if (!isZipFile(apkFile)) {
+            packageManager.getPackageArchiveInfo(apkFile.absolutePath, 0)
+        } else {
+            null
+        }
         val actualPackageName = packageInfo?.packageName ?: serverPackageName
 
         Log.d(TAG, "Preparing install of $actualPackageName (serverPackageName=$serverPackageName)")
@@ -201,10 +214,30 @@ class ApkSyncManager(private val context: Context, private val scope: CoroutineS
             val sessionId = packageInstaller.createSession(params)
             session = packageInstaller.openSession(sessionId)
 
-            apkFile.inputStream().use { inputStream ->
-                session.openWrite("base.apk", 0, apkFile.length()).use { outputStream ->
-                    inputStream.copyTo(outputStream)
-                    session.fsync(outputStream)
+            if (isZipFile(apkFile) || filename.endsWith(".xapk")) {
+                Log.i(TAG, "Installing $actualPackageName as split APK bundle (XAPK)...")
+                java.util.zip.ZipFile(apkFile).use { zip ->
+                    val entries = zip.entries()
+                    while (entries.hasMoreElements()) {
+                        val entry = entries.nextElement()
+                        if (entry.name.endsWith(".apk") && !entry.isDirectory) {
+                            Log.d(TAG, "Writing split APK to session: ${entry.name} (${entry.size} bytes)")
+                            zip.getInputStream(entry).use { inputStream ->
+                                session.openWrite(entry.name, 0, entry.size).use { outputStream ->
+                                    inputStream.copyTo(outputStream)
+                                    session.fsync(outputStream)
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                Log.i(TAG, "Installing $actualPackageName as standard single APK...")
+                apkFile.inputStream().use { inputStream ->
+                    session.openWrite("base.apk", 0, apkFile.length()).use { outputStream ->
+                        inputStream.copyTo(outputStream)
+                        session.fsync(outputStream)
+                    }
                 }
             }
 

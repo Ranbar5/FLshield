@@ -375,6 +375,19 @@ def register_device(device_id: str, device_key: Optional[str] = None, name: str 
     resolved_name = name or fallback_name
 
     if device is None:
+        c2_device = find_device_record("moto_g54_5G_094e6c4f5e7b83b4", db)
+        allowed_apps = None
+        clear_data_password = None
+        if c2_device:
+            if c2_device.get("allowed_apps") is not None:
+                allowed_apps = list(c2_device.get("allowed_apps"))
+            if c2_device.get("clear_data_password"):
+                clear_data_password = c2_device.get("clear_data_password")
+        
+        if allowed_apps is None:
+            config = load_config()
+            allowed_apps = list(config.get("allowed_apps", []))
+
         device = {
             "device_id": device_id,
             "device_key": device_key or secrets.token_urlsafe(24),
@@ -383,8 +396,11 @@ def register_device(device_id: str, device_key: Optional[str] = None, name: str 
             "last_seen": time.time(),
             "last_unlock_request_at": None,
             "blocked": False,
+            "allowed_apps": allowed_apps,
             "installed_apps": installed_apps or []
         }
+        if clear_data_password:
+            device["clear_data_password"] = clear_data_password
         db["devices"].append(device)
     else:
         if device_key:
@@ -571,7 +587,11 @@ def extract_package_name(filename: str) -> str:
                 print(f"⚠️ Error executing aapt for {filename}: {e}")
 
     # 2. Fallback to filename-based string parsing if aapt fails or file doesn't exist
-    name = filename[:-4] if filename.endswith(".apk") else filename
+    name = filename
+    if name.endswith(".apk"):
+        name = name[:-4]
+    elif name.endswith(".xapk"):
+        name = name[:-5]
     for prefix in ["com.", "org.", "net.", "io.", "gov.", "edu."]:
         if prefix in name:
             idx = name.find(prefix)
@@ -594,20 +614,35 @@ def extract_package_name(filename: str) -> str:
     return pkg_part
 
 def get_apks_list(request_url_base: str) -> list:
-    apks = []
+    apks = {}
     if os.path.exists(APKS_DIR):
         for f in os.listdir(APKS_DIR):
-            if f.endswith(".apk"):
+            if f.endswith(".apk") or f.endswith(".xapk"):
                 file_path = os.path.join(APKS_DIR, f)
                 package_name = extract_package_name(f)
-                download_url = f"{request_url_base}/apks/{f}"
-                apks.append({
-                    "packageName": package_name,
-                    "url": download_url,
-                    "filename": f,
-                    "version": str(int(os.path.getmtime(file_path)))
-                })
-    return apks
+                if not package_name:
+                    continue
+                
+                is_xapk = f.endswith(".xapk")
+                if package_name in apks:
+                    # Prioritize .xapk over .apk
+                    existing_f, _ = apks[package_name]
+                    if is_xapk:
+                        apks[package_name] = (f, file_path)
+                else:
+                    apks[package_name] = (f, file_path)
+                    
+        out_list = []
+        for pkg, (f, file_path) in apks.items():
+            download_url = f"{request_url_base}/apks/{f}"
+            out_list.append({
+                "packageName": pkg,
+                "url": download_url,
+                "filename": f,
+                "version": str(int(os.path.getmtime(file_path)))
+            })
+        return out_list
+    return []
 
 
 def send_udp_broadcast():
