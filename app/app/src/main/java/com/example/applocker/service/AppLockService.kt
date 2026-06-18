@@ -25,6 +25,8 @@ import com.example.applocker.ui.StatusBarBlocker
 import kotlinx.coroutines.*
 import okhttp3.*
 import org.json.JSONObject
+import java.net.DatagramPacket
+import java.net.DatagramSocket
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -56,6 +58,7 @@ class AppLockService : Service() {
 
     private var webSocket: WebSocket? = null
     private val wsConnected = AtomicBoolean(false)
+    private var udpSocket: DatagramSocket? = null
     private val http = OkHttpClient.Builder()
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -154,6 +157,7 @@ class AppLockService : Service() {
         }
         
         Log.d(TAG, "Service created")
+        startUdpListener()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -201,8 +205,11 @@ class AppLockService : Service() {
 
         scope.launch { monitorLoop() }
         scope.launch {
+            delay(1000)
+            syncConfigHttp()
             while (isActive) {
-                delay(7000)
+                delay(30 * 60 * 1000L)
+                syncConfigHttp()
                 if (!wsConnected.get()) {
                     connectWebSocket()
                 }
@@ -214,6 +221,7 @@ class AppLockService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        stopUdpListener()
         apkSyncManager.cleanup()
 
         try {
@@ -627,6 +635,119 @@ class AppLockService : Service() {
                 Log.e(TAG, "Error sending installed apps update", e)
             }
         }
+    }
+
+    private fun startUdpListener() {
+        scope.launch(Dispatchers.IO) {
+            try {
+                val socket = DatagramSocket(50001).apply {
+                    reuseAddress = true
+                }
+                udpSocket = socket
+                val buffer = ByteArray(1024)
+                Log.d(TAG, "UDP listener started on port 50001")
+                while (isActive && !socket.isClosed) {
+                    val packet = DatagramPacket(buffer, buffer.size)
+                    socket.receive(packet)
+                    val message = String(packet.data, 0, packet.length)
+                    Log.d(TAG, "Received UDP broadcast packet: $message")
+                    
+                    syncConfigHttp()
+                    mainHandler.post {
+                        if (!wsConnected.get()) {
+                            connectWebSocket()
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in UDP listener", e)
+            }
+        }
+    }
+
+    private fun stopUdpListener() {
+        try {
+            udpSocket?.close()
+            udpSocket = null
+        } catch (_: Exception) {}
+    }
+
+    private fun syncConfigHttp() {
+        val serverUrl = prefs.serverUrl ?: return
+        val deviceId = prefs.deviceId
+        val deviceKey = prefs.deviceKey ?: ""
+        
+        val url = try {
+            serverUrl.trim().trimEnd('/') + 
+                    "/api/provision?deviceId=${java.net.URLEncoder.encode(deviceId, "UTF-8")}" +
+                    if (deviceKey.isNotBlank()) "&deviceKey=${java.net.URLEncoder.encode(deviceKey, "UTF-8")}" else ""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error encoding URL", e)
+            return
+        }
+                
+        val request = Request.Builder().url(url).build()
+        
+        http.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: java.io.IOException) {
+                Log.e(TAG, "HTTP sync failed", e)
+            }
+            override fun onResponse(call: Call, response: Response) {
+                response.use {
+                    if (it.isSuccessful) {
+                        val body = it.body?.string() ?: ""
+                        try {
+                            val json = JSONObject(body)
+                            prefs.applyServerConfig(json)
+                            Log.d(TAG, "HTTP sync successful, applied config")
+                            
+                            if (json.has("apks")) {
+                                apkSyncManager.syncApks(json.getJSONArray("apks"))
+                            }
+                            
+                            if (json.optBoolean("blocked", false)) {
+                                mainHandler.post {
+                                    if (!overlayVisible.get()) {
+                                        if (overlay.show()) {
+                                            overlayVisible.set(true)
+                                        }
+                                    }
+                                }
+                            } else {
+                                mainHandler.post {
+                                    if (overlayVisible.get()) {
+                                        overlayVisible.set(false)
+                                        overlay.dismiss()
+                                    }
+                                }
+                            }
+                            
+                            val set = prefs.getAllowedApps()
+                            if (devicePolicyManager.isDeviceOwnerApp(packageName)) {
+                                val lockPkgs = mutableSetOf(packageName).apply {
+                                    addAll(AppLockPreferences.ALWAYS_ALLOWED)
+                                    addAll(set)
+                                    addAll(getInstalledSettingsPackages())
+                                }
+                                try {
+                                    devicePolicyManager.setLockTaskPackages(
+                                        adminComponent, lockPkgs.toTypedArray()
+                                    )
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Failed to update lock task packages", e)
+                                }
+                            }
+                            applyDeviceOwnerRestrictions()
+                            sendBroadcast(Intent(BROADCAST_CONFIG_UPDATED))
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error applying sync config", e)
+                        }
+                    } else {
+                        Log.e(TAG, "HTTP sync returned error code: ${it.code}")
+                    }
+                }
+            }
+        })
     }
 
     private fun scheduleReconnect() {

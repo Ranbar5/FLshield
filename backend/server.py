@@ -610,6 +610,18 @@ def get_apks_list(request_url_base: str) -> list:
     return apks
 
 
+def send_udp_broadcast():
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        s.sendto(b'{"action":"sync"}', ("255.255.255.255", 50001))
+        s.close()
+        print("📢 Broadcast UDP sync sent on port 50001")
+    except Exception as e:
+        print(f"⚠️ Error sending UDP broadcast: {e}")
+
+
 async def push_config_to_devices():
     config = load_config()
     db = load_devices_db()
@@ -646,6 +658,7 @@ async def push_config_to_devices():
     for d in disconnected:
         active_devices.pop(d, None)
     print(f"📢 Pushed config/apks update to {len(active_devices)} device(s)")
+    send_udp_broadcast()
 
 # ─── Hardcoded rules ─────────────────────────────────────────────────────────
 
