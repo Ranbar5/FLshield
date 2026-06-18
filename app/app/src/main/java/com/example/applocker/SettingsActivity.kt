@@ -1,6 +1,7 @@
 package com.example.applocker
 
 import android.content.Intent
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.platform.LocalContext
@@ -23,6 +24,9 @@ import androidx.compose.ui.unit.sp
 import com.example.applocker.data.AppLockPreferences
 import com.example.applocker.service.AppLockService
 import com.example.applocker.theme.AppLockerTheme
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.Lifecycle
 
 class SettingsActivity : ComponentActivity() {
 
@@ -68,6 +72,39 @@ fun SettingsScreen(
     var newLocalPassword by remember { mutableStateOf("") }
     var confirmLocalPassword by remember { mutableStateOf("") }
     var showPinPrompt by remember { mutableStateOf(true) }
+
+    val context = LocalContext.current
+    val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager }
+    val maxVol = remember { audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC).toFloat() }
+    var volumeValue by remember { 
+        mutableStateOf(audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC).toFloat())
+    }
+    
+    var systemBrightness by remember {
+        val initial = try {
+            android.provider.Settings.System.getInt(context.contentResolver, android.provider.Settings.System.SCREEN_BRIGHTNESS)
+        } catch (_: Exception) {
+            127
+        }
+        mutableStateOf(initial.toFloat() / 255f)
+    }
+    
+    var hasWriteSettingsPermission by remember {
+        mutableStateOf(android.provider.Settings.System.canWrite(context))
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasWriteSettingsPermission = android.provider.Settings.System.canWrite(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -168,6 +205,112 @@ fun SettingsScreen(
                         inactiveTrackColor = Color(0xFF1E293B)
                     )
                 )
+
+                // Volume slider
+                Spacer(modifier = Modifier.height(20.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Volumen",
+                        fontSize = 12.sp,
+                        color = Color(0xFF64748B),
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        "${(volumeValue / maxVol * 100).toInt()}%",
+                        fontSize = 12.sp,
+                        color = Color(0xFF6366F1),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Slider(
+                    value = volumeValue,
+                    onValueChange = {
+                        volumeValue = it
+                        audioManager.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, it.toInt(), 0)
+                    },
+                    valueRange = 0f..maxVol,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = SliderDefaults.colors(
+                        thumbColor = Color(0xFF6366F1),
+                        activeTrackColor = Color(0xFF6366F1),
+                        inactiveTrackColor = Color(0xFF1E293B)
+                    )
+                )
+
+                // Brightness slider
+                Spacer(modifier = Modifier.height(20.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Brillo de pantalla",
+                        fontSize = 12.sp,
+                        color = Color(0xFF64748B),
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        "${(systemBrightness * 100).toInt()}%",
+                        fontSize = 12.sp,
+                        color = Color(0xFF6366F1),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Slider(
+                    value = systemBrightness,
+                    onValueChange = {
+                        systemBrightness = it
+                        if (hasWriteSettingsPermission) {
+                            try {
+                                android.provider.Settings.System.putInt(
+                                    context.contentResolver,
+                                    android.provider.Settings.System.SCREEN_BRIGHTNESS,
+                                    (it * 255).toInt()
+                                )
+                            } catch (_: Exception) {}
+                        }
+                        val window = (context as? android.app.Activity)?.window
+                        if (window != null) {
+                            val layoutParams = window.attributes
+                            layoutParams.screenBrightness = it
+                            window.attributes = layoutParams
+                        }
+                    },
+                    valueRange = 0.05f..1f,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = SliderDefaults.colors(
+                        thumbColor = Color(0xFF6366F1),
+                        activeTrackColor = Color(0xFF6366F1),
+                        inactiveTrackColor = Color(0xFF1E293B)
+                    )
+                )
+                if (!hasWriteSettingsPermission) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Button(
+                        onClick = {
+                            try {
+                                com.example.applocker.service.SettingsMonitorService.allowSettingsNavigation(30_000L)
+                                val intent = Intent(android.provider.Settings.ACTION_MANAGE_WRITE_SETTINGS).apply {
+                                    data = android.net.Uri.parse("package:${context.packageName}")
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            } catch (_: Exception) {}
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEAB308)),
+                        modifier = Modifier.fillMaxWidth().height(36.dp),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Conceder permiso para Brillo de Pantalla 💡", fontSize = 11.sp, color = Color(0xFF0F172A), fontWeight = FontWeight.Bold)
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(28.dp))
 

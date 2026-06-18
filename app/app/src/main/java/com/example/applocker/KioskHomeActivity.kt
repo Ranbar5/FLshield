@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -231,6 +232,33 @@ class KioskHomeActivity : ComponentActivity() {
         var clearDataAppLabel by remember { mutableStateOf("") }
         var clearDataPasswordInput by remember { mutableStateOf("") }
 
+        var batteryLevel by remember { mutableStateOf(100) }
+        var isCharging by remember { mutableStateOf(false) }
+        val context = LocalContext.current
+        
+        DisposableEffect(context) {
+            val receiver = object : BroadcastReceiver() {
+                override fun onReceive(ctx: Context?, intent: Intent?) {
+                    intent?.let {
+                        val level = it.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1)
+                        val scale = it.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1)
+                        if (level != -1 && scale != -1) {
+                            batteryLevel = (level.toFloat() / scale.toFloat() * 100).toInt()
+                        }
+                        val status = it.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1)
+                        isCharging = status == android.os.BatteryManager.BATTERY_STATUS_CHARGING ||
+                                     status == android.os.BatteryManager.BATTERY_STATUS_FULL
+                    }
+                }
+            }
+            context.registerReceiver(receiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+            onDispose {
+                try {
+                    context.unregisterReceiver(receiver)
+                } catch (_: Exception) {}
+            }
+        }
+
         // Periodically refresh kiosk mode status and clock
         LaunchedEffect(Unit) {
             while (true) {
@@ -288,6 +316,23 @@ class KioskHomeActivity : ComponentActivity() {
                             color = Color(0xFF64748B),
                             modifier = Modifier.padding(top = 4.dp)
                         )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = if (isCharging) "⚡" else "🔋",
+                                fontSize = 14.sp,
+                                modifier = Modifier.padding(end = 4.dp)
+                            )
+                            Text(
+                                text = "$batteryLevel%" + (if (isCharging) " (Cargando)" else ""),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (batteryLevel > 20) Color(0xFF94A3B8) else Color(0xFFEF4444)
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
