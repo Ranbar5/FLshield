@@ -78,6 +78,7 @@ class KioskHomeActivity : ComponentActivity() {
     private var appsState = mutableStateOf<List<AppItem>>(emptyList())
     private var deviceNameState = mutableStateOf("")
     private var isDefaultHomeState = mutableStateOf(false)
+    private var fontSizeState = mutableStateOf(16)
     private var homeSettingsPrompted = false
 
     // Flashlight tracking
@@ -110,6 +111,7 @@ class KioskHomeActivity : ComponentActivity() {
             RECEIVER_NOT_EXPORTED)
 
         isDefaultHomeState.value = isCurrentDefaultHome()
+        fontSizeState.value = prefs.fontSizeSp
         verifyHomeLauncher()
         setupFlashlight()
 
@@ -177,6 +179,7 @@ class KioskHomeActivity : ComponentActivity() {
         appsState.value = loadAllowedApps()
         deviceNameState.value = prefs.deviceName
         isDefaultHomeState.value = isCurrentDefaultHome()
+        fontSizeState.value = prefs.fontSizeSp
         if (!com.example.applocker.service.SettingsMonitorService.isKioskPaused()) {
             startLockTaskIfPermitted()
         }
@@ -214,6 +217,7 @@ class KioskHomeActivity : ComponentActivity() {
         val apps by appsState
         val deviceName by deviceNameState
         val isDefaultHome by isDefaultHomeState
+        val fontSizeSp by fontSizeState
         var currentTime by remember { mutableStateOf(getCurrentTime()) }
         var currentDate by remember { mutableStateOf(getCurrentDate()) }
         var showPinDialog by remember { mutableStateOf(false) }
@@ -382,6 +386,7 @@ class KioskHomeActivity : ComponentActivity() {
                         items(apps, key = { it.packageName }) { app ->
                             AppIconItem(
                                 app = app,
+                                fontSizeSp = fontSizeSp,
                                 onClick = { launchApp(app.packageName) },
                                 onLongClick = {
                                     clearDataPackageName = app.packageName
@@ -600,7 +605,13 @@ class KioskHomeActivity : ComponentActivity() {
                             HorizontalDivider(color = Color(0xFF1F2937), modifier = Modifier.padding(vertical = 8.dp))
 
                             // Font Size Option
-                            FontSizeSliderRow(prefs = prefs)
+                            FontSizeSliderRow(
+                                currentFontSize = fontSizeSp,
+                                onFontSizeChange = { newSize ->
+                                    prefs.fontSizeSp = newSize
+                                    fontSizeState.value = newSize
+                                }
+                            )
 
                             HorizontalDivider(color = Color(0xFF1F2937), modifier = Modifier.padding(vertical = 8.dp))
 
@@ -776,8 +787,11 @@ class KioskHomeActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun FontSizeSliderRow(prefs: AppLockPreferences) {
-        var fontSize by remember { mutableStateOf(prefs.fontSizeSp.toFloat()) }
+    private fun FontSizeSliderRow(
+        currentFontSize: Int,
+        onFontSizeChange: (Int) -> Unit
+    ) {
+        var fontSize by remember(currentFontSize) { mutableStateOf(currentFontSize.toFloat()) }
 
         Column(
             modifier = Modifier
@@ -813,7 +827,7 @@ class KioskHomeActivity : ComponentActivity() {
                 value = fontSize,
                 onValueChange = {
                     fontSize = it
-                    prefs.fontSizeSp = it.toInt()
+                    onFontSizeChange(it.toInt())
                 },
                 valueRange = 10f..30f,
                 steps = 19,
@@ -833,7 +847,7 @@ class KioskHomeActivity : ComponentActivity() {
 
     @OptIn(ExperimentalFoundationApi::class)
     @Composable
-    private fun AppIconItem(app: AppItem, onClick: () -> Unit, onLongClick: () -> Unit) {
+    private fun AppIconItem(app: AppItem, fontSizeSp: Int, onClick: () -> Unit, onLongClick: () -> Unit) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
@@ -862,11 +876,11 @@ class KioskHomeActivity : ComponentActivity() {
             Text(
                 text = app.label,
                 color = Color(0xFFCBD5E1),
-                fontSize = 10.sp,
+                fontSize = fontSizeSp.sp,
                 maxLines = 2,
                 textAlign = TextAlign.Center,
                 overflow = TextOverflow.Ellipsis,
-                lineHeight = 13.sp,
+                lineHeight = (fontSizeSp + 3).sp,
                 modifier = Modifier.widthIn(max = 72.dp)
             )
         }
