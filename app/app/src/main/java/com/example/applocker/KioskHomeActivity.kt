@@ -235,6 +235,54 @@ class KioskHomeActivity : ComponentActivity() {
         var batteryLevel by remember { mutableStateOf(100) }
         var isCharging by remember { mutableStateOf(false) }
         val context = LocalContext.current
+
+        var isAutoRotate by remember {
+            val initial = try {
+                Settings.System.getInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, 0) == 1
+            } catch (_: Exception) {
+                false
+            }
+            mutableStateOf(initial)
+        }
+
+        val lifecycleOwnerForRotation = LocalLifecycleOwner.current
+        DisposableEffect(lifecycleOwnerForRotation) {
+            val observer = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    try {
+                        isAutoRotate = Settings.System.getInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, 0) == 1
+                    } catch (_: Exception) {}
+                }
+            }
+            lifecycleOwnerForRotation.lifecycle.addObserver(observer)
+            onDispose {
+                lifecycleOwnerForRotation.lifecycle.removeObserver(observer)
+            }
+        }
+
+        val onToggleRotation = {
+            try {
+                if (Settings.System.canWrite(context)) {
+                    val target = !isAutoRotate
+                    Settings.System.putInt(
+                        context.contentResolver,
+                        Settings.System.ACCELEROMETER_ROTATION,
+                        if (target) 1 else 0
+                    )
+                    isAutoRotate = target
+                } else {
+                    Toast.makeText(context, "Concede el permiso para modificar ajustes del sistema", Toast.LENGTH_LONG).show()
+                    com.example.applocker.service.SettingsMonitorService.allowSettingsNavigation(30_000L)
+                    val intent = Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS).apply {
+                        data = android.net.Uri.parse("package:${context.packageName}")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                }
+            } catch (e: Exception) {
+                Log.e("KioskHome", "Failed to toggle screen rotation", e)
+            }
+        }
         
         DisposableEffect(context) {
             val receiver = object : BroadcastReceiver() {
@@ -628,15 +676,10 @@ class KioskHomeActivity : ComponentActivity() {
 
                             HorizontalDivider(color = Color(0xFF1F2937), modifier = Modifier.padding(vertical = 8.dp))
 
-                            // Mobile Data Option
-                            SettingsMenuRow(
-                                icon = "📡",
-                                title = "Datos Móviles",
-                                description = "Configurar red de datos",
-                                onClick = {
-                                    showSettingsMenu = false
-                                    openMobileDataSettings()
-                                }
+                            // Screen Rotation Option
+                            SettingsMenuRotationRow(
+                                isAutoRotate = isAutoRotate,
+                                onToggle = { onToggleRotation() }
                             )
 
                             HorizontalDivider(color = Color(0xFF1F2937), modifier = Modifier.padding(vertical = 8.dp))
@@ -832,6 +875,45 @@ class KioskHomeActivity : ComponentActivity() {
             }
             Switch(
                 checked = isOn,
+                onCheckedChange = { onToggle() },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = Color(0xFF6366F1),
+                    uncheckedThumbColor = Color(0xFF94A3B8),
+                    uncheckedTrackColor = Color(0xFF1F2937)
+                )
+            )
+        }
+    }
+
+    @Composable
+    private fun SettingsMenuRotationRow(
+        isAutoRotate: Boolean,
+        onToggle: () -> Unit
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .clickable { onToggle() }
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(Color(0xFF1F2937), RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("🔄", fontSize = 20.sp)
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Rotación automática", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text(if (isAutoRotate) "Activada" else "Desactivada", color = if (isAutoRotate) Color(0xFF10B981) else Color(0xFF94A3B8), fontSize = 11.sp)
+            }
+            Switch(
+                checked = isAutoRotate,
                 onCheckedChange = { onToggle() },
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = Color.White,

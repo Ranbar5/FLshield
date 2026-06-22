@@ -94,6 +94,11 @@ class AppLockService : Service() {
                 val pkgName = intent.data?.schemeSpecificPart ?: return
                 Log.d(TAG, "Package change detected: $pkgName (action=$action). Sending updated list to server.")
                 sendInstalledAppsUpdate()
+                if (action != Intent.ACTION_PACKAGE_REMOVED && prefs.isPackageAllowed(pkgName)) {
+                    scope.launch(Dispatchers.IO) {
+                        grantPermissionsToPackage(pkgName)
+                    }
+                }
             }
         }
     }
@@ -351,8 +356,68 @@ class AppLockService : Service() {
                 }
             }
             Log.d(TAG, "Device owner restrictions applied (gps=${prefs.blockGps}, dt=${prefs.blockDateTime})")
+            
+            // Auto grant permissions in background to prevent blocking main thread (ANR)
+            scope.launch(Dispatchers.IO) {
+                for (pkg in AppLockPreferences.ALWAYS_ALLOWED) {
+                    grantPermissionsToPackage(pkg)
+                }
+                for (pkg in AppLockPreferences.ALWAYS_VISIBLE) {
+                    grantPermissionsToPackage(pkg)
+                }
+                for (pkg in prefs.getAllowedApps()) {
+                    grantPermissionsToPackage(pkg)
+                }
+                grantSelfRuntimePermissions()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to apply device owner restrictions", e)
+        }
+    }
+
+    private fun grantPermissionsToPackage(targetPkg: String) {
+        if (!devicePolicyManager.isDeviceOwnerApp(packageName)) return
+        try {
+            val pm = packageManager
+            val info = pm.getPackageInfo(targetPkg, android.content.pm.PackageManager.GET_PERMISSIONS)
+            val requestedPermissions = info.requestedPermissions ?: return
+            
+            for (perm in requestedPermissions) {
+                try {
+                    devicePolicyManager.setPermissionGrantState(
+                        adminComponent,
+                        targetPkg,
+                        perm,
+                        DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED
+                    )
+                    Log.d(TAG, "Programmatically granted permission $perm to $targetPkg")
+                } catch (e: Exception) {
+                    // Ignore non-runtime permissions
+                }
+            }
+        } catch (e: Exception) {
+            // Package might not be installed yet
+        }
+    }
+
+    private fun grantSelfRuntimePermissions() {
+        if (!devicePolicyManager.isDeviceOwnerApp(packageName)) return
+        val permissions = arrayOf(
+            "android.permission.CAMERA",
+            "android.permission.POST_NOTIFICATIONS"
+        )
+        for (perm in permissions) {
+            try {
+                devicePolicyManager.setPermissionGrantState(
+                    adminComponent,
+                    packageName,
+                    perm,
+                    DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED
+                )
+                Log.d(TAG, "Auto-granted runtime permission $perm to self")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to grant runtime permission $perm to self: ${e.message}")
+            }
         }
     }
 
