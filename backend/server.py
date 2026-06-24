@@ -282,7 +282,8 @@ class Database:
 
 db = Database()
 
-APKS_DIR = os.path.join("public", "apks")
+base_dir = os.path.dirname(os.path.abspath(__file__))
+APKS_DIR = os.path.join(base_dir, "public", "apks")
 if not os.path.exists(APKS_DIR):
     os.makedirs(APKS_DIR, exist_ok=True)
 
@@ -311,13 +312,15 @@ def load_config() -> dict:
     if cfg is None:
         cfg = {
             "master_password": "1234",
+            "unlock_pattern": "012",
             "allowed_apps": default_allowed_apps,
             "block_gps": False,
             "block_datetime": False,
             "device_names": {},
             "always_blocked": ["com.android.settings", "com.android.providers.settings"],
             "always_allowed": ["com.example.applocker", "com.android.systemui", "com.android.launcher", "com.google.android.apps.nexuslauncher"],
-            "clear_data_password": "5678"
+            "clear_data_password": "5678",
+            "data_off_password": "4321"
         }
         db.save_config(cfg)
     else:
@@ -330,6 +333,10 @@ def load_config() -> dict:
             cfg["always_allowed"] = ["com.example.applocker", "com.android.systemui", "com.android.launcher", "com.google.android.apps.nexuslauncher"]
         if "clear_data_password" not in cfg:
             cfg["clear_data_password"] = "5678"
+        if "unlock_pattern" not in cfg:
+            cfg["unlock_pattern"] = "012"
+        if "data_off_password" not in cfg:
+            cfg["data_off_password"] = "4321"
     return cfg
 
 def save_config(config: dict):
@@ -681,9 +688,11 @@ async def push_config_to_devices():
             "blockGps": config.get("block_gps", True),
             "blockDateTime": config.get("block_datetime", True),
             "localPassword": config.get("master_password", "1234"),
+            "unlockPattern": config.get("unlock_pattern", "012"),
             "blocked": device.get("blocked", False) if device else False,
             "apks": apks,
-            "clearDataPassword": clear_pass
+            "clearDataPassword": clear_pass,
+            "dataOffPassword": config.get("data_off_password", "4321")
         })
         print(f"DEBUG: Pushing payload to {device_id}: {payload}")
         try:
@@ -756,6 +765,8 @@ class ConfigUpdate(BaseModel):
     block_gps: Optional[bool] = None
     block_datetime: Optional[bool] = None
     clear_data_password: Optional[str] = None
+    unlock_pattern: Optional[str] = None
+    data_off_password: Optional[str] = None
 
 class UnlockDecision(BaseModel):
     device_id: str
@@ -819,10 +830,12 @@ async def provision(
         "blockGps": config.get("block_gps", True),
         "blockDateTime": config.get("block_datetime", True),
         "localPassword": config.get("master_password", "1234"),
+        "unlockPattern": config.get("unlock_pattern", "012"),
         "blocked": device.get("blocked", False),
         "serverWsUrl": server_ws_url,
         "apks": apks,
-        "clearDataPassword": clear_pass
+        "clearDataPassword": clear_pass,
+        "dataOffPassword": config.get("data_off_password", "4321")
     }
 
 
@@ -894,7 +907,9 @@ async def get_config():
         "block_datetime": config.get("block_datetime", True),
         "always_blocked": ALWAYS_BLOCKED,
         "always_allowed": ALWAYS_ALLOWED,
-        "clear_data_password": config.get("clear_data_password", "5678")
+        "clear_data_password": config.get("clear_data_password", "5678"),
+        "unlock_pattern": config.get("unlock_pattern", "012"),
+        "data_off_password": config.get("data_off_password", "4321")
     }
 
 @app.put("/api/config")
@@ -912,6 +927,10 @@ async def update_config(update: ConfigUpdate):
         config["block_datetime"] = update.block_datetime
     if update.clear_data_password is not None:
         config["clear_data_password"] = update.clear_data_password
+    if update.unlock_pattern is not None:
+        config["unlock_pattern"] = update.unlock_pattern
+    if update.data_off_password is not None:
+        config["data_off_password"] = update.data_off_password
 
     save_config(config)
     await push_config_to_devices()
@@ -1197,9 +1216,11 @@ async def websocket_endpoint(websocket: WebSocket):
                         "blockGps": config.get("block_gps", True),
                         "blockDateTime": config.get("block_datetime", True),
                         "localPassword": config.get("master_password", "1234"),
+                        "unlockPattern": config.get("unlock_pattern", "012"),
                         "blocked": device.get("blocked", False),
                         "apks": apks,
-                        "clearDataPassword": clear_pass
+                        "clearDataPassword": clear_pass,
+                        "dataOffPassword": config.get("data_off_password", "4321")
                     }))
 
                 elif msg_type == "installed_apps_update":
@@ -1743,7 +1764,7 @@ async def logout():
 # ─── Static files (web dashboard) ────────────────────────────────────────────
 
 
-app.mount("/", StaticFiles(directory="public", html=True), name="static")
+app.mount("/", StaticFiles(directory=os.path.join(base_dir, "public"), html=True), name="static")
 
 # ─── Entry point ─────────────────────────────────────────────────────────────
 

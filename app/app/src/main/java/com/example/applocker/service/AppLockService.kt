@@ -103,6 +103,24 @@ class AppLockService : Service() {
         }
     }
 
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val action = intent?.action
+            if (action == Intent.ACTION_SCREEN_OFF || 
+                action == Intent.ACTION_SCREEN_ON || 
+                action == Intent.ACTION_USER_PRESENT) {
+                Log.d(TAG, "Screen event detected ($action). Showing lock overlay.")
+                mainHandler.post {
+                    if (!overlay.isShowing()) {
+                        if (overlay.show()) {
+                            overlayVisible.set(true)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Temporary grants are shared across the service and accessibility monitor
     // so a locally unlocked app remains allowed until the grant expires.
 
@@ -115,7 +133,7 @@ class AppLockService : Service() {
 
         overlay = LockOverlayHelper(
             context = this,
-            getLocalPassword = { prefs.localPassword },
+            getLocalPassword = { prefs.unlockPattern },
             onLocalUnlockSuccess = {
                 // Local unlock success — dismiss overlay and temp-grant the current app
                 lastForeground?.let { pkg ->
@@ -159,6 +177,17 @@ class AppLockService : Service() {
             registerReceiver(packageChangeReceiver, pkgFilter)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to register package change receiver", e)
+        }
+        
+        try {
+            val screenFilter = IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_SCREEN_ON)
+                addAction(Intent.ACTION_USER_PRESENT)
+            }
+            registerReceiver(screenReceiver, screenFilter)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to register screen receiver", e)
         }
         
         Log.d(TAG, "Service created")
@@ -240,6 +269,9 @@ class AppLockService : Service() {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to unregister package change receiver", e)
         }
+        try {
+            unregisterReceiver(screenReceiver)
+        } catch (_: Exception) {}
         serviceJob.cancel()
         webSocket?.close(1000, "Service stopped")
         mainHandler.post {

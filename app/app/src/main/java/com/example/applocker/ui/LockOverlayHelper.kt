@@ -58,11 +58,62 @@ class LockOverlayHelper(
 
     enum class UnlockState { Idle, Waiting, Granted, Denied }
 
-    fun isShowing(): Boolean = false
+    fun isShowing(): Boolean = overlayContainer != null && overlayContainer?.isAttachedToWindow == true
 
     fun show(): Boolean {
-        Log.d("LockOverlayHelper", "show() called but overlays are disabled.")
-        return false
+        if (overlayContainer != null && overlayContainer?.isAttachedToWindow == false) {
+            dismiss()
+        }
+        if (isShowing()) return true
+
+        try {
+            val container = FrameLayout(context)
+
+            // Set up lifecycle owners for ComposeView inside WindowManager
+            val lifecycleOwner = OverlayLifecycleOwner()
+            lifecycleOwner.onCreate()
+            lifecycleOwner.onStart()
+            lifecycleOwner.onResume()
+            this.lifecycleOwner = lifecycleOwner
+
+            container.setViewTreeLifecycleOwner(lifecycleOwner)
+            container.setViewTreeViewModelStoreOwner(lifecycleOwner)
+            container.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+
+            val composeView = ComposeView(context).apply {
+                setContent {
+                    LockOverlayScreen(
+                        state = unlockState.value,
+                        getLocalPassword = getLocalPassword,
+                        onLocalUnlock = onLocalUnlockSuccess,
+                        onRequestUnlock = onUnlockRequested
+                    )
+                }
+            }
+            container.addView(composeView)
+
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                else
+                    @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE,
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.CENTER
+            }
+
+            windowManager.addView(container, params)
+            overlayContainer = container
+            return true
+        } catch (e: Exception) {
+            Log.e("LockOverlayHelper", "Failed to show lock overlay", e)
+            dismiss()
+            return false
+        }
     }
 
     fun dismiss() {
@@ -87,9 +138,12 @@ fun LockOverlayScreen(
     onLocalUnlock: () -> Unit,
     onRequestUnlock: () -> Unit
 ) {
-    var pinInput by remember { mutableStateOf("") }
-    var pinError by remember { mutableStateOf(false) }
+    var patternError by remember { mutableStateOf(false) }
     val expectedPassword = getLocalPassword().trim()
+
+    LaunchedEffect(expectedPassword) {
+        android.util.Log.d("LockOverlayScreen", "Expected unlock pattern: $expectedPassword")
+    }
 
     Box(
         modifier = Modifier
@@ -99,103 +153,69 @@ fun LockOverlayScreen(
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(40.dp)
+            modifier = Modifier.padding(24.dp)
         ) {
             // Lock icon
             Box(
                 modifier = Modifier
-                    .size(88.dp)
-                    .clip(RoundedCornerShape(24.dp))
+                    .size(72.dp)
+                    .clip(RoundedCornerShape(20.dp))
                     .background(Color(0xFF1E293B))
-                    .border(1.dp, Color(0xFF334155), RoundedCornerShape(24.dp)),
+                    .border(1.dp, Color(0xFF334155), RoundedCornerShape(20.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Text("🔒", fontSize = 38.sp)
+                Text("🔒", fontSize = 32.sp)
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             Text(
                 text = "Acceso Restringido",
-                fontSize = 22.sp,
+                fontSize = 20.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = Color.White
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             Text(
-                text = "Ingresa la contraseña para desbloquear",
+                text = "Dibuja el patrón para desbloquear",
                 fontSize = 13.sp,
                 color = Color(0xFF94A3B8),
                 textAlign = TextAlign.Center,
-                lineHeight = 20.sp
+                lineHeight = 18.sp
             )
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            // ── Local PIN input ──────────────────────────────────────────
-            OutlinedTextField(
-                value = pinInput,
-                onValueChange = {
-                    pinInput = it
-                    pinError = false
-                },
-                placeholder = { Text("Contraseña", color = Color(0xFF334155)) },
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Password,
-                    imeAction = ImeAction.Done
-                ),
-                keyboardActions = KeyboardActions(
-                    onDone = {
-                                if (pinInput.trim() == expectedPassword) {
-                            onLocalUnlock()
-                        } else {
-                            pinError = true
-                            pinInput = ""
-                        }
+            // ── Local Pattern input ──────────────────────────────────────
+            Box(
+                modifier = Modifier
+                    .size(280.dp)
+                    .background(Color(0xFF111827), RoundedCornerShape(20.dp))
+                    .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(20.dp))
+                    .padding(10.dp)
+            ) {
+                PatternLockView(
+                    expectedPattern = expectedPassword,
+                    onSuccess = {
+                        patternError = false
+                        onLocalUnlock()
+                    },
+                    onError = {
+                        patternError = true
                     }
-                ),
-                singleLine = true,
-                isError = pinError,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFF6366F1),
-                    unfocusedBorderColor = Color(0xFF1E293B),
-                    errorBorderColor = Color(0xFFEF4444),
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    cursorColor = Color(0xFF6366F1),
-                ),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            if (pinError) {
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    "Contraseña incorrecta",
-                    fontSize = 12.sp,
-                    color = Color(0xFFEF4444)
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Button(
-                onClick = {
-                    if (pinInput.trim() == expectedPassword) {
-                        onLocalUnlock()
-                    } else {
-                        pinError = true
-                        pinInput = ""
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("🔓  Desbloquear", fontWeight = FontWeight.Bold)
+            if (patternError) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    "Patrón incorrecto",
+                    fontSize = 12.sp,
+                    color = Color(0xFFEF4444),
+                    fontWeight = FontWeight.SemiBold
+                )
             }
 
             Spacer(modifier = Modifier.height(24.dp))

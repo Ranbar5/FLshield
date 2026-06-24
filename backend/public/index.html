@@ -540,15 +540,75 @@
                 </div>
             </div>
             <div class="card">
+                <div class="card-title">🔑 Contraseña Maestra (Administrador)</div>
+                <p style="font-size:0.82rem; color: var(--muted); margin-bottom:14px; line-height:1.6;">
+                    Esta contraseña/PIN numérica es la que se requiere para acceder a la configuración de FLShield en los dispositivos Android (Ajustes de la aplicación).
+                </p>
                 <div class="form-group">
-                    <label>Nueva contraseña</label>
-                    <input type="password" id="new-pass" placeholder="Ingresa la nueva contraseña" />
+                    <label>Nueva Contraseña de Administrador (PIN)</label>
+                    <input type="password" id="new-pass" placeholder="Ingresa el PIN numérico" />
                 </div>
                 <div class="form-group">
-                    <label>Confirmar contraseña</label>
-                    <input type="password" id="confirm-pass" placeholder="Repite la contraseña" />
+                    <label>Confirmar Contraseña</label>
+                    <input type="password" id="confirm-pass" placeholder="Repite el PIN" />
                 </div>
                 <button class="btn btn-primary" onclick="savePassword()">🔑 Actualizar Contraseña</button>
+            </div>
+
+            <div class="card">
+                <div class="card-title">🎨 Patrón de Desbloqueo del Dispositivo</div>
+                <p style="font-size:0.82rem; color: var(--muted); margin-bottom:14px; line-height:1.6;">
+                    Este patrón gráfico de 3x3 puntos es el que utilizará el operario para desbloquear la pantalla del dispositivo móvil (Lock Overlay).
+                </p>
+                <div class="form-group">
+                    <label>Secuencia del Patrón (se autogenera al dibujar abajo)</label>
+                    <input type="text" id="unlock-pattern-input" placeholder="Ej. 012" readonly style="font-family: monospace; background: rgba(0,0,0,0.1); cursor: not-allowed;" />
+                </div>
+
+                <!-- Ayudante de Patrón -->
+                <div style="margin: 20px 0; padding: 16px; background: var(--surface2); border: 1px solid var(--border); border-radius: 14px;">
+                    <div style="font-size: 0.82rem; font-weight: 600; color: var(--text); margin-bottom: 4px;">🎨 Dibujar Patrón de Desbloqueo</div>
+                    <p style="font-size: 0.72rem; color: var(--muted); margin-bottom: 12px;">
+                        Dibuja el patrón haciendo clic en los puntos en orden. Se generará la secuencia de dígitos.
+                    </p>
+
+                    <div style="display: flex; gap: 20px; align-items: center; justify-content: center; flex-wrap: wrap;">
+                        <!-- El Grid del Patrón -->
+                        <div id="pattern-helper-grid" style="display: grid; grid-template-columns: repeat(3, 44px); gap: 16px; background: rgba(0,0,0,0.15); padding: 16px; border-radius: 12px;">
+                            <div class="pattern-helper-dot" data-index="0" style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.06); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.85rem; font-weight: 700; color: var(--muted); transition: all 0.15s;">0</div>
+                            <div class="pattern-helper-dot" data-index="1" style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.06); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.85rem; font-weight: 700; color: var(--muted); transition: all 0.15s;">1</div>
+                            <div class="pattern-helper-dot" data-index="2" style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.06); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.85rem; font-weight: 700; color: var(--muted); transition: all 0.15s;">2</div>
+                            <div class="pattern-helper-dot" data-index="3" style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.06); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.85rem; font-weight: 700; color: var(--muted); transition: all 0.15s;">3</div>
+                            <div class="pattern-helper-dot" data-index="4" style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.06); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.85rem; font-weight: 700; color: var(--muted); transition: all 0.15s;">4</div>
+                            <div class="pattern-helper-dot" data-index="5" style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.06); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.85rem; font-weight: 700; color: var(--muted); transition: all 0.15s;">5</div>
+                            <div class="pattern-helper-dot" data-index="6" style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.06); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.85rem; font-weight: 700; color: var(--muted); transition: all 0.15s;">6</div>
+                            <div class="pattern-helper-dot" data-index="7" style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.06); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.85rem; font-weight: 700; color: var(--muted); transition: all 0.15s;">7</div>
+                            <div class="pattern-helper-dot" data-index="8" style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.06); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.85rem; font-weight: 700; color: var(--muted); transition: all 0.15s;">8</div>
+                        </div>
+
+                        <!-- Controles e Info -->
+                        <div style="flex: 1; min-width: 140px; display: flex; flex-direction: column; gap: 10px;">
+                            <div style="font-size: 0.72rem; color: var(--muted);">
+                                Secuencia seleccionada:
+                                <span id="pattern-helper-sequence" style="font-family: monospace; font-size: 0.95rem; font-weight: 700; color: var(--primary); background: rgba(99,102,241,0.08); padding: 2px 8px; border-radius: 6px; margin-left: 6px; border: 1px solid rgba(99,102,241,0.2);">Ninguna</span>
+                            </div>
+                            <button type="button" class="btn btn-ghost btn-sm" onclick="clearPatternHelper()">🧹 Limpiar Dibujo</button>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" onclick="saveGlobalClearDataPassword()">💾 Guardar Contraseña de Borrado</button>
+            </div>
+            <div class="card">
+                <div class="card-title">📶 Desactivación de Datos Móviles</div>
+                <p style="font-size:0.82rem; color: var(--muted); margin-bottom:14px; line-height:1.6;">
+                    Contraseña requerida en los dispositivos para apagar o desactivar los datos móviles desde el menú de Ajustes Rápidos.
+                </p>
+                <div class="form-group">
+                    <label>Contraseña para Apagar Datos Móviles</label>
+                    <input type="text" id="data-off-pass" placeholder="Por defecto: 4321" />
+                </div>
+                <button class="btn btn-primary" onclick="saveDataOffPassword()">💾 Guardar Contraseña de Datos</button>
             </div>
             <div class="card">
                 <div class="card-title">Borrado de Datos de Aplicaciones</div>
@@ -564,7 +624,7 @@
             <div class="card">
                 <div class="card-title">⚠️ Importante</div>
                 <p style="font-size:0.82rem; color: var(--muted); line-height:1.6;">
-                    La contraseña <strong>solo existe en este servidor</strong>. Los dispositivos Android nunca conocen la contraseña. Cuando un usuario solicita desbloqueo, la solicitud aparece aquí y tú la apruebas ingresando esta contraseña.
+                    La contraseña <strong>solo existe en este servidor</strong>. Los dispositivos Android nunca conocen la contraseña. Cuando un usuario solicita desbloqueo, la solicitud aparece aquí y tú la apruebas ingresando esta contraseña. En los dispositivos con pantalla de bloqueo activa, el operario dibuja el patrón de puntos correspondiente a los números de esta contraseña.
                 </p>
             </div>
         </div>
@@ -1291,6 +1351,17 @@
             globalClearPassEl.value = data.clear_data_password || '';
         }
 
+        const dataOffPassEl = document.getElementById('data-off-pass');
+        if (dataOffPassEl) {
+            dataOffPassEl.value = data.data_off_password || '';
+        }
+
+        const unlockPatternEl = document.getElementById('unlock-pattern-input');
+        if (unlockPatternEl) {
+            unlockPatternEl.value = data.unlock_pattern || '';
+            document.getElementById('pattern-helper-sequence').innerText = data.unlock_pattern || 'Ninguna';
+        }
+
         const ab = document.getElementById('always-blocked-chips');
         ab.innerHTML = (data.always_blocked || []).map(p => `<div class="chip" style="border-color:rgba(239,68,68,0.3);color:#fca5a5;">${p}</div>`).join('');
 
@@ -1383,6 +1454,23 @@
         } catch(e) { toast('Error de conexión', 'err'); }
     }
 
+    async function saveUnlockPattern() {
+        const pattern = document.getElementById('unlock-pattern-input').value.trim();
+        if (!pattern) return toast('Dibuja un patrón primero usando la cuadrícula', 'err');
+        try {
+            const res = await fetch('/api/config', {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({unlock_pattern: pattern})
+            });
+            if (res.ok) {
+                toast('🎨 Patrón de desbloqueo actualizado correctamente');
+            } else {
+                toast('Error al guardar el patrón', 'err');
+            }
+        } catch(e) { toast('Error de conexión', 'err'); }
+    }
+
     async function saveGlobalClearDataPassword() {
         const pass = document.getElementById('global-clear-pass').value.trim();
         if (!pass) return toast('Ingresa una contraseña de borrado', 'err');
@@ -1396,6 +1484,23 @@
                 toast('🔑 Contraseña global de borrado actualizada');
             } else {
                 toast('Error al guardar contraseña de borrado', 'err');
+            }
+        } catch(e) { toast('Error de conexión', 'err'); }
+    }
+
+    async function saveDataOffPassword() {
+        const pass = document.getElementById('data-off-pass').value.trim();
+        if (!pass) return toast('Ingresa una contraseña', 'err');
+        try {
+            const res = await fetch('/api/config', {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({data_off_password: pass})
+            });
+            if (res.ok) {
+                toast('📶 Contraseña de desactivación de datos actualizada');
+            } else {
+                toast('Error al guardar la contraseña de datos', 'err');
             }
         } catch(e) { toast('Error de conexión', 'err'); }
     }
@@ -1817,11 +1922,50 @@
         }
     }
 
+    let currentPattern = [];
+
+    function initPatternHelper() {
+        const dots = document.querySelectorAll('.pattern-helper-dot');
+        dots.forEach(dot => {
+            dot.addEventListener('click', () => {
+                const index = dot.getAttribute('data-index');
+                if (currentPattern.includes(index)) {
+                    return;
+                }
+                currentPattern.push(index);
+
+                dot.style.background = 'var(--primary)';
+                dot.style.color = '#fff';
+                dot.style.borderColor = 'var(--primary)';
+                dot.style.boxShadow = '0 0 10px var(--primary-glow)';
+
+                const patternStr = currentPattern.join('');
+                document.getElementById('unlock-pattern-input').value = patternStr;
+
+                document.getElementById('pattern-helper-sequence').innerText = patternStr;
+            });
+        });
+     }
+
+     window.clearPatternHelper = function() {
+        currentPattern = [];
+        const dots = document.querySelectorAll('.pattern-helper-dot');
+        dots.forEach(dot => {
+            dot.style.background = 'rgba(255,255,255,0.06)';
+            dot.style.color = 'var(--muted)';
+            dot.style.borderColor = 'var(--border)';
+            dot.style.boxShadow = 'none';
+        });
+        document.getElementById('unlock-pattern-input').value = '';
+        document.getElementById('pattern-helper-sequence').innerText = 'Ninguna';
+     };
+
     checkAuthStatus();
     setInterval(loadDevices, 5000); // Reduced from 3s to 5s
 
 
     document.addEventListener('DOMContentLoaded', () => {
+        initPatternHelper();
         document.getElementById('pkg-input')?.addEventListener('keydown', e => {
             if (e.key === 'Enter') addApp();
         });

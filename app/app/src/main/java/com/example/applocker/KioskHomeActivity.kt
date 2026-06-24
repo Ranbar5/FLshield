@@ -21,6 +21,7 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.util.Log
+import android.telephony.TelephonyManager
 import com.example.applocker.service.SettingsMonitorService
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -213,6 +214,15 @@ class KioskHomeActivity : ComponentActivity() {
         // Block back button on home screen
     }
 
+    private fun isMobileDataEnabled(context: Context): Boolean {
+        return try {
+            val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+            tm.isDataEnabled
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     @Composable
     private fun KioskScreen() {
         val apps by appsState
@@ -225,6 +235,7 @@ class KioskHomeActivity : ComponentActivity() {
         var pinInput by remember { mutableStateOf("") }
         var pendingAction by remember { mutableStateOf<PendingAction?>(null) }
         var showSettingsMenu by remember { mutableStateOf(false) }
+        var isMobileDataOn by remember { mutableStateOf(isMobileDataEnabled(this@KioskHomeActivity)) }
         var kioskActive by remember { mutableStateOf(isLockTaskModeActive()) }
 
         var showClearDataDialog by remember { mutableStateOf(false) }
@@ -307,11 +318,12 @@ class KioskHomeActivity : ComponentActivity() {
             }
         }
 
-        // Periodically refresh kiosk mode status and clock
+        // Periodically refresh kiosk mode status, mobile data state and clock
         LaunchedEffect(Unit) {
             while (true) {
                 kioskActive = isLockTaskModeActive()
-                kotlinx.coroutines.delay(30_000)
+                isMobileDataOn = isMobileDataEnabled(context)
+                kotlinx.coroutines.delay(5000)
                 currentTime = getCurrentTime()
                 currentDate = getCurrentDate()
             }
@@ -504,13 +516,19 @@ class KioskHomeActivity : ComponentActivity() {
                     pinInput = ""
                 },
                 onAccept = {
-                    if (pinInput == prefs.localPassword) {
+                    val expectedPass = if (pendingAction == PendingAction.DISABLE_DATA) {
+                        prefs.dataOffPassword
+                    } else {
+                        prefs.localPassword
+                    }
+                    if (pinInput == expectedPass) {
                         showPinDialog = false
                         val action = pendingAction
                         pendingAction = null
                         pinInput = ""
                         when (action) {
                             PendingAction.SETTINGS -> startActivity(Intent(this@KioskHomeActivity, SettingsActivity::class.java))
+                            PendingAction.DISABLE_DATA -> openMobileDataSettings()
                             else -> {}
                         }
                     } else {
@@ -660,6 +678,18 @@ class KioskHomeActivity : ComponentActivity() {
                                     openWifiSettings()
                                 }
                             )
+
+                            HorizontalDivider(color = Color(0xFF1F2937), modifier = Modifier.padding(vertical = 8.dp))
+
+                            // Mobile Data Option
+                             SettingsMenuMobileDataRow(
+                                 isMobileDataOn = isMobileDataOn,
+                                 onToggleAttempt = {
+                                     pendingAction = PendingAction.DISABLE_DATA
+                                     showPinDialog = true
+                                     showSettingsMenu = false
+                                 }
+                             )
 
                             HorizontalDivider(color = Color(0xFF1F2937), modifier = Modifier.padding(vertical = 8.dp))
 
@@ -844,6 +874,51 @@ class KioskHomeActivity : ComponentActivity() {
                 Text(description, color = Color(0xFF94A3B8), fontSize = 11.sp)
             }
             Text("➔", color = Color(0xFF4B5563), fontSize = 16.sp)
+        }
+    }
+
+    @Composable
+    private fun SettingsMenuMobileDataRow(
+        isMobileDataOn: Boolean,
+        onToggleAttempt: () -> Unit
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .clickable { onToggleAttempt() }
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(Color(0xFF1F2937), RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("📱", fontSize = 20.sp)
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Datos Móviles", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (isMobileDataOn) "Encendidos" else "Apagados",
+                    color = if (isMobileDataOn) Color(0xFF10B981) else Color(0xFFEF4444),
+                    fontSize = 11.sp
+                )
+            }
+            Switch(
+                checked = isMobileDataOn,
+                onCheckedChange = { onToggleAttempt() },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = Color(0xFF10B981),
+                    uncheckedThumbColor = Color.White,
+                    uncheckedTrackColor = Color(0xFFEF4444),
+                    checkedBorderColor = Color.Transparent,
+                    uncheckedBorderColor = Color.Transparent
+                )
+            )
         }
     }
 
@@ -1148,7 +1223,8 @@ class KioskHomeActivity : ComponentActivity() {
     }
 
     private enum class PendingAction {
-        SETTINGS
+        SETTINGS,
+        DISABLE_DATA
     }
 
     @OptIn(ExperimentalFoundationApi::class)
