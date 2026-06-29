@@ -881,9 +881,6 @@ async def get_enrollment_config(
         "android.app.extra.PROVISIONING_DEVICE_ADMIN_SIGNATURE_CHECKSUM": signature_checksum,
         "android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION": download_url,
         "android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM": package_checksum,
-        "android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE": {
-            "server_url": server_url
-        }
     }
     
     if wifi_ssid:
