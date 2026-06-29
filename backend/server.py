@@ -455,23 +455,33 @@ def get_aapt_path() -> Optional[str]:
     return None
 
 def get_apksigner_path() -> Optional[str]:
-    base_dir = r"C:\Users\Soporte\AppData\Local\Android\Sdk\build-tools"
-    if os.path.exists(base_dir):
-        versions = []
-        for d in os.listdir(base_dir):
-            d_path = os.path.join(base_dir, d)
-            if os.path.isdir(d_path):
-                apksigner_bat = os.path.join(d_path, "apksigner.bat")
-                if os.path.exists(apksigner_bat):
-                    versions.append((d, apksigner_bat))
-        if versions:
-            def version_key(v):
-                try:
-                    return [int(x) for x in v[0].split(".")]
-                except Exception:
-                    return [0]
-            versions.sort(key=version_key)
-            return versions[-1][1]
+    import shutil
+    if os.name == 'nt':
+        base_dir = r"C:\Users\Soporte\AppData\Local\Android\Sdk\build-tools"
+        if os.path.exists(base_dir):
+            versions = []
+            for d in os.listdir(base_dir):
+                d_path = os.path.join(base_dir, d)
+                if os.path.isdir(d_path):
+                    apksigner_bat = os.path.join(d_path, "apksigner.bat")
+                    if os.path.exists(apksigner_bat):
+                        versions.append((d, apksigner_bat))
+            if versions:
+                def version_key(v):
+                    try:
+                        return [int(x) for x in v[0].split(".")]
+                    except Exception:
+                        return [0]
+                versions.sort(key=version_key)
+                return versions[-1][1]
+    else:
+        # Linux/macOS
+        path = shutil.which("apksigner")
+        if path:
+            return path
+        for p in ["/usr/bin/apksigner", "/usr/local/bin/apksigner"]:
+            if os.path.exists(p):
+                return p
     return None
 
 def get_apk_signature_checksum(apk_filename: str) -> str:
