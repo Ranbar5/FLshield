@@ -416,13 +416,20 @@ class AppLockService : Service() {
             
             for (perm in requestedPermissions) {
                 try {
-                    devicePolicyManager.setPermissionGrantState(
+                    val currentState = devicePolicyManager.getPermissionGrantState(
                         adminComponent,
                         targetPkg,
-                        perm,
-                        DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED
+                        perm
                     )
-                    Log.d(TAG, "Programmatically granted permission $perm to $targetPkg")
+                    if (currentState != DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED) {
+                        devicePolicyManager.setPermissionGrantState(
+                            adminComponent,
+                            targetPkg,
+                            perm,
+                            DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED
+                        )
+                        Log.d(TAG, "Programmatically granted permission $perm to $targetPkg")
+                    }
                 } catch (e: Exception) {
                     // Ignore non-runtime permissions
                 }
@@ -440,13 +447,20 @@ class AppLockService : Service() {
         )
         for (perm in permissions) {
             try {
-                devicePolicyManager.setPermissionGrantState(
+                val currentState = devicePolicyManager.getPermissionGrantState(
                     adminComponent,
                     packageName,
-                    perm,
-                    DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED
+                    perm
                 )
-                Log.d(TAG, "Auto-granted runtime permission $perm to self")
+                if (currentState != DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED) {
+                    devicePolicyManager.setPermissionGrantState(
+                        adminComponent,
+                        packageName,
+                        perm,
+                        DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED
+                    )
+                    Log.d(TAG, "Auto-granted runtime permission $perm to self")
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to grant runtime permission $perm to self: ${e.message}")
             }
