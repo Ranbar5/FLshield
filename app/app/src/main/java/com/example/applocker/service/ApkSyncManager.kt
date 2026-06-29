@@ -258,6 +258,18 @@ class ApkSyncManager(private val context: Context, private val scope: CoroutineS
             )
             session.commit(pendingIntent.intentSender)
             Log.d(TAG, "Committed installation session for $actualPackageName")
+
+            try {
+                val syncPrefs = context.getSharedPreferences("apk_sync_prefs", Context.MODE_PRIVATE)
+                syncPrefs.edit()
+                    .putString(actualPackageName, version)
+                    .putString(serverPackageName, version)
+                    .apply()
+                Log.d(TAG, "Saved sync version in preferences: $version")
+            } catch (prefEx: Exception) {
+                Log.e(TAG, "Failed to write preferences", prefEx)
+            }
+
             return true
         } catch (e: Exception) {
             Log.e(TAG, "Exception installing $actualPackageName", e)
