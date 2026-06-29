@@ -510,7 +510,7 @@ def get_apk_signature_checksum(apk_filename: str) -> str:
             if match:
                 sha_hex = match.group(1)
                 sha_bytes = bytes.fromhex(sha_hex)
-                base64_url = base64.urlsafe_b64encode(sha_bytes).decode('utf-8').rstrip('=')
+                base64_url = base64.urlsafe_b64encode(sha_bytes).decode('utf-8')
                 return base64_url
     except Exception as e:
         print(f"⚠️ Error running apksigner: {e}")
@@ -872,7 +872,7 @@ async def get_enrollment_config(
             with open(file_path, "rb") as f:
                 for chunk in iter(lambda: f.read(4096), b""):
                     hasher.update(chunk)
-            package_checksum = base64.urlsafe_b64encode(hasher.digest()).decode('utf-8').rstrip('=')
+            package_checksum = base64.urlsafe_b64encode(hasher.digest()).decode('utf-8')
         except Exception as e:
             print(f"Error calculating APK file checksum: {e}")
             
