@@ -543,6 +543,13 @@ def get_aapt_path() -> Optional[str]:
 
 def get_apksigner_path() -> Optional[str]:
     import shutil
+
+    def version_key(v):
+        try:
+            return [int(x) for x in v.split(".")]
+        except Exception:
+            return [0]
+
     if os.name == 'nt':
         base_dir = r"C:\Users\Soporte\AppData\Local\Android\Sdk\build-tools"
         if os.path.exists(base_dir):
@@ -554,15 +561,34 @@ def get_apksigner_path() -> Optional[str]:
                     if os.path.exists(apksigner_bat):
                         versions.append((d, apksigner_bat))
             if versions:
-                def version_key(v):
-                    try:
-                        return [int(x) for x in v[0].split(".")]
-                    except Exception:
-                        return [0]
-                versions.sort(key=version_key)
+                versions.sort(key=lambda v: version_key(v[0]))
                 return versions[-1][1]
     else:
-        # Linux/macOS
+        # Linux/macOS: search SDK build-tools (newest first), then PATH
+        sdk_roots = []
+        for env in ("ANDROID_SDK_ROOT", "ANDROID_HOME"):
+            r = os.environ.get(env)
+            if r:
+                sdk_roots.append(r)
+        home = os.path.expanduser("~")
+        sdk_roots.append(os.path.join(home, "Android", "Sdk"))
+        sdk_roots.append(os.path.join(home, "android-sdk"))
+        candidates = []
+        for root in sdk_roots:
+            bt = os.path.join(root, "build-tools")
+            if not os.path.isdir(bt):
+                continue
+            try:
+                dirs = os.listdir(bt)
+            except OSError:
+                continue
+            for d in dirs:
+                apksigner = os.path.join(bt, d, "apksigner")
+                if os.path.isfile(apksigner):
+                    candidates.append((version_key(d), apksigner))
+        if candidates:
+            candidates.sort(key=lambda c: c[0])
+            return candidates[-1][1]
         path = shutil.which("apksigner")
         if path:
             return path
@@ -573,16 +599,18 @@ def get_apksigner_path() -> Optional[str]:
 
 def get_apk_signature_checksum(apk_filename: str) -> str:
     import subprocess, re, base64
-    # Default fallback for debug signature
-    default_checksum = "Z__nvKp4GOyEAYbfAFTkwTa3RE5Qm1KnoHaaILcWwu4"
+    # URL-safe base64 WITHOUT padding of the SHA-256 of the signing certificate (AOSP format).
+    default_checksum = "dtQPzqhS1I6kW5_KPCdwSEdzaaWak6rz6bSTi2z9cRA"
     file_path = os.path.join(APKS_DIR, apk_filename)
     if not os.path.exists(file_path):
+        print(f"⚠️ APK not found for signature checksum: {file_path} (using fallback)")
         return default_checksum
-    
+
     apksigner_path = get_apksigner_path()
     if not apksigner_path:
+        print(f"⚠️ apksigner not found (using fallback signature checksum)")
         return default_checksum
-        
+
     try:
         result = subprocess.run(
             [apksigner_path, "verify", "--print-certs", file_path],
@@ -597,11 +625,11 @@ def get_apk_signature_checksum(apk_filename: str) -> str:
             if match:
                 sha_hex = match.group(1)
                 sha_bytes = bytes.fromhex(sha_hex)
-                base64_url = base64.urlsafe_b64encode(sha_bytes).decode('utf-8')
-                return base64_url
+                return base64.urlsafe_b64encode(sha_bytes).decode('utf-8').rstrip('=')
     except Exception as e:
         print(f"⚠️ Error running apksigner: {e}")
-        
+
+    print(f"⚠️ Could not compute signature checksum (using fallback)")    
     return default_checksum
 
 def get_local_ip() -> str:
@@ -967,7 +995,7 @@ async def get_enrollment_config(
             with open(file_path, "rb") as f:
                 for chunk in iter(lambda: f.read(4096), b""):
                     hasher.update(chunk)
-            package_checksum = base64.urlsafe_b64encode(hasher.digest()).decode('utf-8')
+            package_checksum = base64.urlsafe_b64encode(hasher.digest()).decode('utf-8').rstrip('=')
         except Exception as e:
             print(f"Error calculating APK file checksum: {e}")
             
