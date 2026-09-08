@@ -6,7 +6,7 @@
     <title>FLShield — Centro de Control</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <script src="/qrious.min.js"></script>
+    <script src="./qrious.min.js"></script>
     <style>
         :root {
             --bg: #090e1a;
@@ -350,6 +350,10 @@
         <p class="login-subtitle">Inicia sesión para acceder al panel de control</p>
         
         <form id="login-form" onsubmit="handleLogin(event)">
+            <div class="login-form-group">
+                <label class="login-label">Servidor (opcional)</label>
+                <input type="text" id="login-server" class="login-input" placeholder="http://172.16.33.159:3000" autocomplete="off">
+            </div>
             <div class="login-form-group">
                 <label class="login-label">Usuario</label>
                 <input type="text" id="login-username" class="login-input" autocomplete="username" required>
@@ -877,10 +881,25 @@
         isAuthenticated = true;
     }
 
-    // Intercept all fetch requests globally
+    // Intercept all fetch requests globally: prefix the backend base (when the
+    // panel runs from a static host like GitHub Pages) and send the session
+    // token from localStorage. Same-origin deployments keep working unchanged.
+    let __FLSERVER = (new URLSearchParams(location.search).get('server') ||
+                        new URLSearchParams(location.search).get('s') ||
+                        localStorage.getItem('flshield_server') || '').replace(/\/+$/, '');
+    const loginServerInput = document.getElementById('login-server');
+    if (loginServerInput && __FLSERVER) loginServerInput.value = __FLSERVER;
+    function flAbsUrl(resource) {
+        return (typeof resource === 'string' && resource.startsWith('/')) ? __FLSERVER + resource : resource;
+    }
     const originalFetch = window.fetch;
     window.fetch = async function(resource, init) {
-        const response = await originalFetch(resource, init);
+        init = init || {};
+        const headers = new Headers(init.headers || {});
+        const token = localStorage.getItem('flshield_token');
+        if (token) headers.set('Authorization', 'Bearer ' + token);
+        init.headers = headers;
+        const response = await originalFetch(flAbsUrl(resource), init);
         // If unauthorized and not auth endpoints, trigger login overlay
         const isString = typeof resource === 'string';
         const urlStr = isString ? resource : (resource.url || '');
@@ -892,7 +911,7 @@
 
     async function checkAuthStatus() {
         try {
-            const res = await originalFetch(`/api/auth/status?_=${Date.now()}`);
+            const res = await fetch(`/api/auth/status?_=${Date.now()}`);
             if (res.ok) {
                 const data = await res.json();
                 if (data.authenticated) {
@@ -914,11 +933,17 @@
         const usernameEl = document.getElementById('login-username');
         const passwordEl = document.getElementById('login-password');
         const errorEl = document.getElementById('login-error');
-        
+
+        const serverInput = document.getElementById('login-server');
+        if (serverInput && serverInput.value.trim()) {
+            __FLSERVER = serverInput.value.trim().replace(/\/+$/, '');
+            localStorage.setItem('flshield_server', __FLSERVER);
+        }
+
         errorEl.style.display = 'none';
         
         try {
-            const res = await originalFetch('/api/auth/login', {
+            const res = await fetch('/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -928,6 +953,8 @@
             });
             
             if (res.ok) {
+                const data = await res.json();
+                if (data.token) localStorage.setItem('flshield_token', data.token);
                 showApp();
                 loadConfig();
                 loadDevices();
@@ -949,10 +976,11 @@
 
     async function handleLogout() {
         try {
-            await originalFetch('/api/auth/logout', { method: 'POST' });
+            await fetch('/api/auth/logout', { method: 'POST' });
         } catch (e) {
             console.error("Logout failed:", e);
         }
+        localStorage.removeItem('flshield_token');
         showLogin();
     }
 

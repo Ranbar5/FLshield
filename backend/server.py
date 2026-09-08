@@ -11,6 +11,7 @@ import secrets
 import time
 import requests
 import sqlite3
+import fnmatch
 try:
     import psycopg2
     HAS_POSTGRES = True
@@ -27,10 +28,52 @@ ADMIN_PASS = "TNm5VqCferU6hKtW32upxWOae"
 active_sessions = set()
 
 
+def get_allowed_origins() -> list:
+    """Origins allowed to call the API from static hosting (GitHub Pages, local dev)."""
+    pats = ["https://*.github.io", "http://localhost:*", "http://127.0.0.1:*"]
+    extra = os.environ.get("ALLOWED_ORIGINS", "")
+    if extra:
+        pats += [o.strip() for o in extra.split(",") if o.strip()]
+    return pats
+
+
+def get_session_token(request: Request) -> str:
+    """Session token from Authorization header (web panel on static hosting) or cookie."""
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        return auth[len("Bearer "):].strip()
+    return request.cookies.get("flshield_session") or ""
+
+
 @app.middleware("http")
 async def auth_and_cache_middleware(request: Request, call_next):
     path = request.url.path
-    
+
+    # If the panel runs from a static site (different origin than this server),
+    # add CORS headers and answer preflight. Auth is token-based in that case.
+    origin = request.headers.get("origin")
+    cors_origin = ""
+    if origin:
+        for pat in get_allowed_origins():
+            if fnmatch.fnmatch(origin.lower(), pat.lower()):
+                cors_origin = origin
+                break
+
+    def add_cors_headers(response):
+        if cors_origin:
+            response.headers["Access-Control-Allow-Origin"] = cors_origin
+            response.headers["Vary"] = "Origin"
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = (
+                "Content-Type, Authorization, X-FLShield-Device-ID"
+            )
+            response.headers["Access-Control-Max-Age"] = "86400"
+        return response
+
+    if request.method == "OPTIONS" and path.startswith("/api/"):
+        return add_cors_headers(JSONResponse(status_code=200, content={"ok": True}))
+
     # Protect all /api/ endpoints EXCEPT the device-facing public ones and auth.
     # /api/device/pin is the kiosk's only network interaction (offline-first design):
     # it authenticates via device_key in the body, not a web session, so it must be public.
@@ -43,14 +86,15 @@ async def auth_and_cache_middleware(request: Request, call_next):
     }
     
     if path.startswith("/api/") and path not in public_paths:
-        session_token = request.cookies.get("flshield_session")
+        session_token = get_session_token(request)
         if not session_token or session_token not in active_sessions:
-            return JSONResponse(
+            return add_cors_headers(JSONResponse(
                 status_code=401,
                 content={"detail": "Not authenticated"}
-            )
+            ))
             
     response = await call_next(request)
+    add_cors_headers(response)
     
     if path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
@@ -1895,7 +1939,11 @@ async def login(credentials: LoginRequest):
     if credentials.username == ADMIN_USER and credentials.password == ADMIN_PASS:
         session_token = secrets.token_hex(32)
         active_sessions.add(session_token)
-        response = JSONResponse(content={"success": True, "message": "Login successful"})
+        response = JSONResponse(content={
+            "success": True,
+            "message": "Login successful",
+            "token": session_token
+        })
         response.set_cookie(
             key="flshield_session",
             value=session_token,
@@ -1909,7 +1957,7 @@ async def login(credentials: LoginRequest):
 
 @app.get("/api/auth/status")
 async def auth_status(request: Request):
-    session_token = request.cookies.get("flshield_session")
+    session_token = get_session_token(request)
     if session_token and session_token in active_sessions:
         return {"authenticated": True, "user": ADMIN_USER}
     return {"authenticated": False}
