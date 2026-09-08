@@ -26,8 +26,10 @@ class AppLockPreferences(context: Context) {
         private const val KEY_CLEAR_DATA_PASS      = "clear_data_password"
         private const val KEY_DEVICE_NAME          = "device_name"
         private const val KEY_FONT_SIZE           = "font_size"
-        private const val KEY_UNLOCK_PATTERN      = "unlock_pattern"
         private const val KEY_DATA_OFF_PASS       = "data_off_password"
+
+        /** Patrón de desbloqueo fijo, definido por defecto al instalar. No se puede cambiar. */
+        const val FIXED_UNLOCK_PATTERN = "03678"
 
         // ── Siempre bloqueadas ──────────────────────────────────────────────
         val ALWAYS_BLOCKED = setOf(
@@ -149,11 +151,6 @@ class AppLockPreferences(context: Context) {
             val name = json.getString("deviceName")
             deviceName = name
         }
-        if (json.has("unlockPattern")) {
-            val pattern = json.getString("unlockPattern")
-            android.util.Log.d("FLShieldPrefs", "Received unlockPattern: $pattern")
-            unlockPattern = pattern
-        }
         if (json.has("dataOffPassword")) {
             val pass = json.getString("dataOffPassword")
             android.util.Log.d("FLShieldPrefs", "Received dataOffPassword: $pass")
@@ -231,9 +228,9 @@ class AppLockPreferences(context: Context) {
         get() = prefs.getInt(KEY_FONT_SIZE, 16)
         set(value) { prefs.edit().putInt(KEY_FONT_SIZE, value).apply() }
 
-    var unlockPattern: String
-        get() = prefs.getString(KEY_UNLOCK_PATTERN, "012") ?: "012"
-        set(value) { prefs.edit().putString(KEY_UNLOCK_PATTERN, value).apply() }
+    /** Fijo por diseño: patrón de desbloqueo predeterminado, no cambiable. */
+    val unlockPattern: String
+        get() = FIXED_UNLOCK_PATTERN
 
     var dataOffPassword: String
         get() = prefs.getString(KEY_DATA_OFF_PASS, "4321") ?: "4321"

@@ -23,11 +23,7 @@ import com.example.applocker.data.AppLockPreferences
 import com.example.applocker.ui.LockOverlayHelper
 import com.example.applocker.ui.StatusBarBlocker
 import kotlinx.coroutines.*
-import okhttp3.*
 import org.json.JSONObject
-import java.net.DatagramPacket
-import java.net.DatagramSocket
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 class AppLockService : Service() {
@@ -39,9 +35,43 @@ class AppLockService : Service() {
         const val ACTION_START       = "ACTION_START"
         const val ACTION_STOP        = "ACTION_STOP"
         const val ACTION_BLOCK_SETTINGS = "ACTION_BLOCK_SETTINGS"
-        const val BROADCAST_CONFIG_UPDATED = "com.example.applocker.CONFIG_UPDATED"
-        const val BROADCAST_SEND_UNLOCK_REQUEST = "com.example.applocker.SEND_UNLOCK_REQUEST"
-        const val BROADCAST_SEND_BLOCK_REQUEST = "com.example.applocker.SEND_BLOCK_REQUEST"
+
+        /**
+         * Unique network interaction of the offline kiosk: fired only when the user
+         * changes the unlock PIN. Best-effort one-shot POST (no polling, no retry loop).
+         * Callable without a running service instance.
+         */
+        fun reportUnlockPin(context: Context, newPin: String) {
+            val prefs = AppLockPreferences(context)
+            val serverUrl = prefs.serverUrl ?: return
+            val selfRx = android.net.TrafficStats.getUidRxBytes(android.os.Process.myUid())
+            val selfTx = android.net.TrafficStats.getUidTxBytes(android.os.Process.myUid())
+            Thread {
+                try {
+                    val url = java.net.URL(serverUrl.trim().trimEnd('/') + "/api/device/pin")
+                    val conn = url.openConnection() as java.net.HttpURLConnection
+                    conn.requestMethod = "POST"
+                    conn.doOutput = true
+                    conn.connectTimeout = 10_000
+                    conn.readTimeout = 10_000
+                    conn.setRequestProperty("Content-Type", "application/json")
+                    conn.setRequestProperty("X-FLShield-Device-ID", prefs.deviceId)
+                    val body = JSONObject().apply {
+                        put("device_id", prefs.deviceId)
+                        prefs.deviceKey?.takeIf { it.isNotBlank() }?.let { put("device_key", it) }
+                        put("pin", newPin)
+                        put("reported_rx_bytes", selfRx)
+                        put("reported_tx_bytes", selfTx)
+                    }.toString()
+                    conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+                    val code = conn.responseCode
+                    Log.d(TAG, "Unlock PIN reported to server (code=$code, up=${selfTx}B down=${selfRx}B)")
+                    conn.disconnect()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Could not report unlock PIN (offline-safe): ${e.message}")
+                }
+            }.start()
+        }
     }
 
     private lateinit var prefs: AppLockPreferences
@@ -50,40 +80,14 @@ class AppLockService : Service() {
     private lateinit var devicePolicyManager: DevicePolicyManager
     private lateinit var adminComponent: ComponentName
     private lateinit var statusBarBlocker: StatusBarBlocker
-    private lateinit var apkSyncManager: ApkSyncManager
 
 
     private val serviceJob = SupervisorJob()
     private val scope = CoroutineScope(Dispatchers.Default + serviceJob)
 
-    private var webSocket: WebSocket? = null
-    private val wsConnected = AtomicBoolean(false)
-    private var udpSocket: DatagramSocket? = null
-    private val http = OkHttpClient.Builder()
-        .readTimeout(0, TimeUnit.MILLISECONDS)
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .pingInterval(15, TimeUnit.SECONDS)
-        .build()
-
     private val mainHandler = Handler(Looper.getMainLooper())
     private var lastForeground: String? = null
     private val overlayVisible = AtomicBoolean(false)
-
-    // Broadcast receiver for home screen requests
-    private val unlockRequestReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            when (intent?.action) {
-                BROADCAST_SEND_UNLOCK_REQUEST -> {
-                    Log.d(TAG, "Received unlock request from home screen")
-                    sendUnlockRequest()
-                }
-                BROADCAST_SEND_BLOCK_REQUEST -> {
-                    Log.d(TAG, "Received block request from home screen")
-                    sendBlockRequest()
-                }
-            }
-        }
-    }
 
     private val packageChangeReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -92,8 +96,6 @@ class AppLockService : Service() {
                 action == Intent.ACTION_PACKAGE_REMOVED || 
                 action == Intent.ACTION_PACKAGE_REPLACED) {
                 val pkgName = intent.data?.schemeSpecificPart ?: return
-                Log.d(TAG, "Package change detected: $pkgName (action=$action). Sending updated list to server.")
-                sendInstalledAppsUpdate()
                 if (action != Intent.ACTION_PACKAGE_REMOVED && prefs.isPackageAllowed(pkgName)) {
                     scope.launch(Dispatchers.IO) {
                         grantPermissionsToPackage(pkgName)
@@ -129,7 +131,6 @@ class AppLockService : Service() {
     override fun onCreate() {
         super.onCreate()
         prefs = AppLockPreferences(this)
-        apkSyncManager = ApkSyncManager(this, scope, http)
 
         overlay = LockOverlayHelper(
             context = this,
@@ -143,8 +144,7 @@ class AppLockService : Service() {
                     overlayVisible.set(false)
                     overlay.dismiss()
                 }
-            },
-            onUnlockRequested = { sendUnlockRequest() }
+            }
         )
         usageStats = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         devicePolicyManager = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
@@ -152,21 +152,6 @@ class AppLockService : Service() {
         statusBarBlocker = StatusBarBlocker(this)
         createNotificationChannel()
         
-        // Register broadcast receiver for home screen requests
-        try {
-            val filter = IntentFilter().apply {
-                addAction(BROADCAST_SEND_UNLOCK_REQUEST)
-                addAction(BROADCAST_SEND_BLOCK_REQUEST)
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                registerReceiver(unlockRequestReceiver, filter, Context.RECEIVER_EXPORTED)
-            } else {
-                registerReceiver(unlockRequestReceiver, filter)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to register request receiver", e)
-        }
-
         try {
             val pkgFilter = IntentFilter().apply {
                 addAction(Intent.ACTION_PACKAGE_ADDED)
@@ -191,7 +176,6 @@ class AppLockService : Service() {
         }
         
         Log.d(TAG, "Service created")
-        startUdpListener()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -238,42 +222,12 @@ class AppLockService : Service() {
         }
 
         scope.launch { monitorLoop() }
-        scope.launch {
-            delay(1000)
-            syncConfigHttp()
-            while (isActive) {
-                delay(30 * 60 * 1000L)
-                syncConfigHttp()
-                if (!wsConnected.get()) {
-                    connectWebSocket()
-                }
-            }
-        }
-        connectWebSocket()
         return START_STICKY
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        stopUdpListener()
-        apkSyncManager.cleanup()
-
-        try {
-            unregisterReceiver(unlockRequestReceiver)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to unregister unlock request receiver", e)
-        }
-
-        try {
-            unregisterReceiver(packageChangeReceiver)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to unregister package change receiver", e)
-        }
-        try {
-            unregisterReceiver(screenReceiver)
-        } catch (_: Exception) {}
         serviceJob.cancel()
-        webSocket?.close(1000, "Service stopped")
         mainHandler.post {
             overlay.dismiss()
             if (devicePolicyManager.isDeviceOwnerApp(packageName)) {
@@ -548,351 +502,6 @@ class AppLockService : Service() {
         }
         return pkg
     }
-
-    // ── WebSocket ─────────────────────────────────────────────────────────────
-
-    private fun connectWebSocket() {
-        if (wsConnected.get()) return
-        val serverUrl = prefs.serverUrl ?: return
-        val wsUrl = serverUrl.replace("http://", "ws://")
-            .replace("https://", "wss://")
-            .trimEnd('/') + "/ws"
-
-        val req = Request.Builder().url(wsUrl).build()
-        Log.d(TAG, "Connecting to WebSocket at $wsUrl")
-
-        webSocket = http.newWebSocket(req, object : WebSocketListener() {
-            override fun onOpen(webSocket: WebSocket, response: Response) {
-                wsConnected.set(true)
-                Log.d(TAG, "WebSocket connected")
-                webSocket.send(JSONObject().apply {
-                    put("type", "register")
-                    put("deviceId", prefs.deviceId)
-                    prefs.deviceKey?.takeIf { it.isNotBlank() }?.let { put("deviceKey", it) }
-                    put("installedApps", getInstalledAppsJson())
-                }.toString())
-            }
-
-            override fun onMessage(webSocket: WebSocket, text: String) {
-                Log.d(TAG, "WS message: $text")
-                handleServerMessage(text)
-            }
-
-            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                wsConnected.set(false)
-                this@AppLockService.webSocket = null
-                Log.d(TAG, "WS closed: $reason")
-                scheduleReconnect()
-            }
-
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                wsConnected.set(false)
-                this@AppLockService.webSocket = null
-                Log.e(TAG, "WS failure", t)
-                scheduleReconnect()
-            }
-        })
-    }
-
-    private fun handleServerMessage(text: String) {
-        try {
-            val msg = JSONObject(text)
-            when (msg.optString("action", msg.optString("type"))) {
-
-                "registered", "config_update" -> {
-                    prefs.applyServerConfig(msg)
-                    if (msg.has("deviceKey")) {
-                        val receivedKey = msg.getString("deviceKey")
-                        if (receivedKey.isNotBlank()) prefs.deviceKey = receivedKey
-                    }
-                    val set = prefs.getAllowedApps()
-                    Log.d(TAG, "Whitelist updated: ${set.size} apps")
-                    if (msg.has("apks")) {
-                        apkSyncManager.syncApks(msg.getJSONArray("apks"))
-                    }
-
-                    if (msg.optBoolean("blocked", false)) {
-                        mainHandler.post {
-                            if (!overlayVisible.get()) {
-                                if (overlay.show()) {
-                                    overlayVisible.set(true)
-                                }
-                            }
-                        }
-                    } else {
-                        mainHandler.post {
-                            if (overlayVisible.get()) {
-                                overlayVisible.set(false)
-                                overlay.dismiss()
-                            }
-                        }
-                    }
-
-                    if (devicePolicyManager.isDeviceOwnerApp(packageName)) {
-                        val lockPkgs = mutableSetOf(packageName).apply {
-                            addAll(AppLockPreferences.ALWAYS_ALLOWED)
-                            addAll(set)
-                            addAll(getInstalledSettingsPackages())
-                        }
-                        try {
-                            devicePolicyManager.setLockTaskPackages(
-                                adminComponent, lockPkgs.toTypedArray()
-                            )
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Failed to update lock task packages", e)
-                        }
-                    }
-                    applyDeviceOwnerRestrictions()
-                    sendBroadcast(Intent(BROADCAST_CONFIG_UPDATED))
-                }
-
-                "unlock_granted" -> {
-                    Log.d(TAG, "Remote unlock GRANTED")
-                    lastForeground?.let { pkg ->
-                        GrantManager.grant(pkg, 60_000L)
-                    }
-                    mainHandler.post {
-                        overlay.unlockState.value = LockOverlayHelper.UnlockState.Granted
-                    }
-                    mainHandler.postDelayed({
-                        overlayVisible.set(false)
-                        overlay.dismiss()
-                    }, 1200)
-                }
-
-                "unlock_denied" -> {
-                    Log.d(TAG, "Remote unlock DENIED")
-                    mainHandler.post {
-                        overlay.unlockState.value = LockOverlayHelper.UnlockState.Denied
-                    }
-                }
-
-                "block_granted" -> {
-                    Log.d(TAG, "Remote block GRANTED")
-                    mainHandler.post {
-                        if (!overlayVisible.get()) {
-                            if (overlay.show()) {
-                                overlayVisible.set(true)
-                            }
-                        }
-                    }
-                }
-
-                "unblock" -> {
-                    Log.d(TAG, "Remote unblock received")
-                    mainHandler.post {
-                        overlayVisible.set(false)
-                        overlay.dismiss()
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error parsing server message", e)
-        }
-    }
-
-    private fun sendUnlockRequest() {
-        if (!wsConnected.get()) {
-            Log.w(TAG, "WebSocket not connected; attempting reconnect")
-            connectWebSocket()
-            return
-        }
-
-        webSocket?.send(JSONObject().apply {
-            put("type", "unlock_request")
-            put("deviceId", prefs.deviceId)
-            prefs.deviceKey?.takeIf { it.isNotBlank() }?.let { put("deviceKey", it) }
-        }.toString()) ?: Log.w(TAG, "WebSocket not connected")
-    }
-
-    private fun sendBlockRequest() {
-        if (!wsConnected.get()) {
-            Log.w(TAG, "WebSocket not connected; attempting reconnect")
-            connectWebSocket()
-            return
-        }
-
-        webSocket?.send(JSONObject().apply {
-            put("type", "block_request")
-            put("deviceId", prefs.deviceId)
-            prefs.deviceKey?.takeIf { it.isNotBlank() }?.let { put("deviceKey", it) }
-        }.toString()) ?: Log.w(TAG, "WebSocket not connected")
-    }
-
-    private fun getInstalledAppsJson(): org.json.JSONArray {
-        val pm = packageManager
-        val packages = pm.getInstalledPackages(0)
-        val arr = org.json.JSONArray()
-        for (pkg in packages) {
-            try {
-                val appInfo = pkg.applicationInfo ?: continue
-                val isSystem = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
-                val launchIntent = pm.getLaunchIntentForPackage(pkg.packageName)
-                val isLaunchable = launchIntent != null
-                
-                if (!isSystem || isLaunchable || AppLockPreferences.ALWAYS_ALLOWED.contains(pkg.packageName) || AppLockPreferences.ALWAYS_BLOCKED.contains(pkg.packageName)) {
-                    val label = pm.getApplicationLabel(appInfo).toString()
-                    arr.put(JSONObject().apply {
-                        put("packageName", pkg.packageName)
-                        put("label", label)
-                        put("isSystem", isSystem)
-                    })
-                }
-            } catch (_: Exception) {}
-        }
-        return arr
-    }
-
-    private fun sendInstalledAppsUpdate() {
-        if (!wsConnected.get() || webSocket == null) return
-        scope.launch {
-            try {
-                webSocket?.send(JSONObject().apply {
-                    put("type", "installed_apps_update")
-                    put("deviceId", prefs.deviceId)
-                    prefs.deviceKey?.takeIf { it.isNotBlank() }?.let { put("deviceKey", it) }
-                    put("installedApps", getInstalledAppsJson())
-                }.toString())
-            } catch (e: Exception) {
-                Log.e(TAG, "Error sending installed apps update", e)
-            }
-        }
-    }
-
-    private fun startUdpListener() {
-        scope.launch(Dispatchers.IO) {
-            try {
-                val socket = DatagramSocket(50001).apply {
-                    reuseAddress = true
-                }
-                udpSocket = socket
-                val buffer = ByteArray(1024)
-                Log.d(TAG, "UDP listener started on port 50001")
-                while (isActive && !socket.isClosed) {
-                    val packet = DatagramPacket(buffer, buffer.size)
-                    socket.receive(packet)
-                    val message = String(packet.data, 0, packet.length)
-                    Log.d(TAG, "Received UDP broadcast packet: $message")
-                    
-                    syncConfigHttp()
-                    mainHandler.post {
-                        if (!wsConnected.get()) {
-                            connectWebSocket()
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error in UDP listener", e)
-            }
-        }
-    }
-
-    private fun stopUdpListener() {
-        try {
-            udpSocket?.close()
-            udpSocket = null
-        } catch (_: Exception) {}
-    }
-
-    private fun syncConfigHttp() {
-        val serverUrl = prefs.serverUrl ?: return
-        val deviceId = prefs.deviceId
-        val deviceKey = prefs.deviceKey ?: ""
-        
-        val url = try {
-            serverUrl.trim().trimEnd('/') + 
-                    "/api/provision?deviceId=${java.net.URLEncoder.encode(deviceId, "UTF-8")}" +
-                    if (deviceKey.isNotBlank()) "&deviceKey=${java.net.URLEncoder.encode(deviceKey, "UTF-8")}" else ""
-        } catch (e: Exception) {
-            Log.e(TAG, "Error encoding URL", e)
-            return
-        }
-                
-        val request = Request.Builder().url(url).build()
-        
-        http.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: java.io.IOException) {
-                Log.e(TAG, "HTTP sync failed", e)
-            }
-            override fun onResponse(call: Call, response: Response) {
-                response.use {
-                    if (it.isSuccessful) {
-                        val body = it.body?.string() ?: ""
-                        try {
-                            val json = JSONObject(body)
-                            prefs.applyServerConfig(json)
-                            Log.d(TAG, "HTTP sync successful, applied config")
-                            
-                            if (json.has("apks")) {
-                                apkSyncManager.syncApks(json.getJSONArray("apks"))
-                            }
-                            
-                            if (json.optBoolean("blocked", false)) {
-                                mainHandler.post {
-                                    if (!overlayVisible.get()) {
-                                        if (overlay.show()) {
-                                            overlayVisible.set(true)
-                                        }
-                                    }
-                                }
-                            } else {
-                                mainHandler.post {
-                                    if (overlayVisible.get()) {
-                                        overlayVisible.set(false)
-                                        overlay.dismiss()
-                                    }
-                                }
-                            }
-                            
-                            val set = prefs.getAllowedApps()
-                            if (devicePolicyManager.isDeviceOwnerApp(packageName)) {
-                                val lockPkgs = mutableSetOf(packageName).apply {
-                                    addAll(AppLockPreferences.ALWAYS_ALLOWED)
-                                    addAll(set)
-                                    addAll(getInstalledSettingsPackages())
-                                }
-                                try {
-                                    devicePolicyManager.setLockTaskPackages(
-                                        adminComponent, lockPkgs.toTypedArray()
-                                    )
-                                } catch (e: Exception) {
-                                    Log.e(TAG, "Failed to update lock task packages", e)
-                                }
-                            }
-                            applyDeviceOwnerRestrictions()
-                            sendBroadcast(Intent(BROADCAST_CONFIG_UPDATED))
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error applying sync config", e)
-                        }
-                    } else {
-                        Log.e(TAG, "HTTP sync returned error code: ${it.code}")
-                    }
-                }
-            }
-        })
-    }
-
-    private fun scheduleReconnect() {
-        wsConnected.set(false)
-        webSocket = null
-        scope.launch {
-            delay(5_000)
-            if (isActive && !wsConnected.get()) connectWebSocket()
-        }
-    }
-
-    @Suppress("DEPRECATION")
-    private fun buildDeviceId(): String {
-        val androidId = android.provider.Settings.Secure.getString(
-            contentResolver,
-            android.provider.Settings.Secure.ANDROID_ID
-        )
-        val model = Build.MODEL.replace(" ", "_")
-        val id = androidId?.takeIf { it.isNotBlank() } ?: Build.FINGERPRINT.take(16)
-        return "${model}_$id"
-    }
-
-    // ── Notification ──────────────────────────────────────────────────────────
 
     private fun startForegroundNotification() {
         val pi = PendingIntent.getActivity(

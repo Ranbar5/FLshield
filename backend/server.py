@@ -1,6 +1,7 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, UploadFile, File, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
+from starlette.concurrency import iterate_in_threadpool
 from pydantic import BaseModel
 from typing import Optional, List
 import uvicorn
@@ -30,12 +31,15 @@ active_sessions = set()
 async def auth_and_cache_middleware(request: Request, call_next):
     path = request.url.path
     
-    # Protect all /api/ endpoints EXCEPT /api/provision, /api/enrollment-config, /api/auth/login, /api/auth/status
+    # Protect all /api/ endpoints EXCEPT the device-facing public ones and auth.
+    # /api/device/pin is the kiosk's only network interaction (offline-first design):
+    # it authenticates via device_key in the body, not a web session, so it must be public.
     public_paths = {
         "/api/provision",
         "/api/enrollment-config",
         "/api/auth/login",
-        "/api/auth/status"
+        "/api/auth/status",
+        "/api/device/pin"
     }
     
     if path.startswith("/api/") and path not in public_paths:
@@ -52,7 +56,28 @@ async def auth_and_cache_middleware(request: Request, call_next):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
-        
+
+    # ── Per-device data-traffic meter ─────────────────────────────────────
+    # Requests sent by the kiosk carry X-FLShield-Device-ID. For those, count
+    # the bytes the device sent (request body via Content-Length) and the bytes
+    # returned to it (response body), and accumulate them against that device.
+    device_id = request.headers.get("X-FLShield-Device-ID")
+    if device_id and device_id.strip():
+        try:
+            try:
+                rx_bytes = int(request.headers.get("content-length", 0))
+            except Exception:
+                rx_bytes = 0
+            tx_bytes = 0
+            body_chunks = []
+            async for chunk in response.body_iterator:
+                body_chunks.append(chunk)
+                tx_bytes += len(chunk)
+            response.body_iterator = iterate_in_threadpool(b"\n".join(body_chunks))
+            record_device_traffic(device_id.strip(), rx_bytes, tx_bytes)
+        except Exception as e:
+            print(f"⚠️ Traffic meter error for {device_id}: {e}")
+
     return response
 
 
@@ -100,8 +125,14 @@ class Database:
                 last_unlock_request_at REAL,
                 last_block_request_at REAL,
                 clear_data_password VARCHAR(100),
+                device_unlock_pin VARCHAR(100),
                 created_at REAL,
-                last_seen_at REAL
+                last_seen_at REAL,
+                data_rx_bytes INTEGER DEFAULT 0,
+                data_tx_bytes INTEGER DEFAULT 0,
+                device_reported_rx_bytes INTEGER DEFAULT 0,
+                device_reported_tx_bytes INTEGER DEFAULT 0,
+                traffic_updated_at REAL
             )
         """)
         
@@ -109,6 +140,22 @@ class Database:
         for col in ["created_at", "last_seen", "last_seen_at"]:
             try:
                 cursor.execute(f"ALTER TABLE devices ADD COLUMN {col} REAL")
+                conn.commit()
+                print(f"[Database] Migration: Added column '{col}' to devices table")
+            except Exception:
+                pass
+        try:
+            cursor.execute("ALTER TABLE devices ADD COLUMN device_unlock_pin TEXT")
+            conn.commit()
+            print("[Database] Migration: Added column 'device_unlock_pin' to devices table")
+        except Exception:
+            pass
+
+        # Migrations for per-device data-traffic meter
+        for col in ["data_rx_bytes", "data_tx_bytes", "device_reported_rx_bytes",
+                    "device_reported_tx_bytes", "traffic_updated_at"]:
+            try:
+                cursor.execute(f"ALTER TABLE devices ADD COLUMN {col} TEXT")
                 conn.commit()
                 print(f"[Database] Migration: Added column '{col}' to devices table")
             except Exception:
@@ -213,13 +260,16 @@ class Database:
         rows = self._execute("""
             SELECT device_id, device_key, name, blocked, allowed_apps, installed_apps, 
                    last_seen, last_unlock_request_at, last_block_request_at, clear_data_password, 
-                   created_at, last_seen_at
+                   device_unlock_pin,
+                   created_at, last_seen_at,
+                   data_rx_bytes, data_tx_bytes, device_reported_rx_bytes,
+                   device_reported_tx_bytes, traffic_updated_at
             FROM devices
         """, commit=False, fetchall=True)
         devices = []
         for r in rows:
             last_seen_val = r[6] if r[6] is not None else (r[11] if r[11] is not None else 0.0)
-            created_at_val = r[10] if r[10] is not None else last_seen_val
+            created_at_val = r[11] if r[11] is not None else last_seen_val
             devices.append({
                 "device_id": r[0],
                 "device_key": r[1],
@@ -232,7 +282,13 @@ class Database:
                 "last_unlock_request_at": r[7],
                 "last_block_request_at": r[8],
                 "clear_data_password": r[9],
-                "created_at": created_at_val
+                "device_unlock_pin": r[10],
+                "created_at": created_at_val,
+                "data_received": int(r[13] or 0),
+                "data_sent": int(r[14] or 0),
+                "device_reported_received": int(r[15] or 0),
+                "device_reported_sent": int(r[16] or 0),
+                "traffic_updated_at": r[17]
             })
         return devices
 
@@ -245,8 +301,11 @@ class Database:
             INSERT INTO devices (
                 device_id, device_key, name, blocked, allowed_apps, installed_apps, 
                 last_seen, last_unlock_request_at, last_block_request_at, clear_data_password, 
-                created_at, last_seen_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                device_unlock_pin,
+                created_at, last_seen_at,
+                data_rx_bytes, data_tx_bytes, device_reported_rx_bytes,
+                device_reported_tx_bytes, traffic_updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(device_id) DO UPDATE SET
                 device_key = EXCLUDED.device_key,
                 name = EXCLUDED.name,
@@ -257,8 +316,14 @@ class Database:
                 last_unlock_request_at = EXCLUDED.last_unlock_request_at,
                 last_block_request_at = EXCLUDED.last_block_request_at,
                 clear_data_password = EXCLUDED.clear_data_password,
+                device_unlock_pin = EXCLUDED.device_unlock_pin,
                 created_at = EXCLUDED.created_at,
-                last_seen_at = EXCLUDED.last_seen_at
+                last_seen_at = EXCLUDED.last_seen_at,
+                data_rx_bytes = EXCLUDED.data_rx_bytes,
+                data_tx_bytes = EXCLUDED.data_tx_bytes,
+                device_reported_rx_bytes = EXCLUDED.device_reported_rx_bytes,
+                device_reported_tx_bytes = EXCLUDED.device_reported_tx_bytes,
+                traffic_updated_at = EXCLUDED.traffic_updated_at
         """, (
             d["device_id"],
             d.get("device_key"),
@@ -270,8 +335,14 @@ class Database:
             d.get("last_unlock_request_at"),
             d.get("last_block_request_at"),
             d.get("clear_data_password"),
+            d.get("device_unlock_pin"),
             created_at_val,
-            last_seen_val
+            last_seen_val,
+            d.get("data_received", 0),
+            d.get("data_sent", 0),
+            d.get("device_reported_received", 0),
+            d.get("device_reported_sent", 0),
+            d.get("traffic_updated_at")
         ))
 
     def delete_device(self, device_id: str):
@@ -312,7 +383,7 @@ def load_config() -> dict:
     if cfg is None:
         cfg = {
             "master_password": "1234",
-            "unlock_pattern": "012",
+            "unlock_pattern": "03678",
             "allowed_apps": default_allowed_apps,
             "block_gps": False,
             "block_datetime": False,
@@ -334,7 +405,7 @@ def load_config() -> dict:
         if "clear_data_password" not in cfg:
             cfg["clear_data_password"] = "5678"
         if "unlock_pattern" not in cfg:
-            cfg["unlock_pattern"] = "012"
+            cfg["unlock_pattern"] = "03678"
         if "data_off_password" not in cfg:
             cfg["data_off_password"] = "4321"
     return cfg
@@ -367,6 +438,22 @@ def find_device_record(device_id: str, db: Optional[dict] = None) -> Optional[di
         if record.get("device_id") == device_id:
             return record
     return None
+
+
+def record_device_traffic(device_id: str, rx_bytes: int, tx_bytes: int):
+    """Accumulate server-measured traffic for a device (bytes sent by the device
+    and bytes returned to it) and refresh traffic_updated_at."""
+    try:
+        db = load_devices_db()
+        device = find_device_record(device_id, db)
+        if device is None:
+            return
+        device["data_received"] = int(device.get("data_received", 0)) + int(rx_bytes or 0)
+        device["data_sent"] = int(device.get("data_sent", 0)) + int(tx_bytes or 0)
+        device["traffic_updated_at"] = time.time()
+        save_devices_db(db)
+    except Exception as e:
+        print(f"⚠️ Could not record traffic for {device_id}: {e}")
 
 
 KNOWN_DEVICE_NAMES = {
@@ -698,7 +785,7 @@ async def push_config_to_devices():
             "blockGps": config.get("block_gps", True),
             "blockDateTime": config.get("block_datetime", True),
             "localPassword": config.get("master_password", "1234"),
-            "unlockPattern": config.get("unlock_pattern", "012"),
+            "unlockPattern": config.get("unlock_pattern", "03678"),
             "blocked": device.get("blocked", False) if device else False,
             "apks": apks,
             "clearDataPassword": clear_pass,
@@ -802,6 +889,14 @@ class DeviceAppToggle(BaseModel):
     package_name: str
     allowed: bool
 
+class DeviceUnlockPin(BaseModel):
+    device_id: str
+    device_key: Optional[str] = None
+    pin: str
+    # Optional kiosk self-report of its accumulated data usage (TrafficStats, since boot)
+    reported_rx_bytes: Optional[int] = None
+    reported_tx_bytes: Optional[int] = None
+
 
 # ─── REST Endpoints ───────────────────────────────────────────────────────────
 
@@ -840,7 +935,7 @@ async def provision(
         "blockGps": config.get("block_gps", True),
         "blockDateTime": config.get("block_datetime", True),
         "localPassword": config.get("master_password", "1234"),
-        "unlockPattern": config.get("unlock_pattern", "012"),
+        "unlockPattern": config.get("unlock_pattern", "03678"),
         "blocked": device.get("blocked", False),
         "serverWsUrl": server_ws_url,
         "apks": apks,
@@ -913,7 +1008,7 @@ async def get_config():
         "always_blocked": ALWAYS_BLOCKED,
         "always_allowed": ALWAYS_ALLOWED,
         "clear_data_password": config.get("clear_data_password", "5678"),
-        "unlock_pattern": config.get("unlock_pattern", "012"),
+        "unlock_pattern": config.get("unlock_pattern", "03678"),
         "data_off_password": config.get("data_off_password", "4321")
     }
 
@@ -962,7 +1057,12 @@ async def get_devices():
             "last_seen": device.get("last_seen", 0),
             "clear_data_password": device.get("clear_data_password", ""),
             "allowed_apps": device.get("allowed_apps"),
-            "installed_apps": device.get("installed_apps", [])
+            "installed_apps": device.get("installed_apps", []),
+            "data_received": device.get("data_received", 0),
+            "data_sent": device.get("data_sent", 0),
+            "device_reported_received": device.get("device_reported_received", 0),
+            "device_reported_sent": device.get("device_reported_sent", 0),
+            "traffic_updated_at": device.get("traffic_updated_at")
         })
 
     for d_id, info in active_devices.items():
@@ -1054,6 +1154,32 @@ async def reset_device_apps(cmd: BlockCommand):
     device.pop("allowed_apps", None)
     save_devices_db(db)
     await push_config_to_devices()
+    return {"success": True}
+
+@app.post("/api/device/pin")
+async def set_device_unlock_pin(cmd: DeviceUnlockPin):
+    """Stores the device's local unlock PIN (the unique connection a device makes when the user changes it)."""
+    db = load_devices_db()
+    device = find_device_record(cmd.device_id, db)
+    if not device:
+        return JSONResponse(status_code=404, content={"error": "Dispositivo no encontrado"})
+
+    stored_key = device.get("device_key")
+    if stored_key and cmd.device_key and stored_key != cmd.device_key:
+        return JSONResponse(status_code=401, content={"error": "Clave de dispositivo incorrecta"})
+
+    device["device_unlock_pin"] = cmd.pin.strip() if cmd.pin else ""
+    # Persist the kiosk's self-reported accumulated data usage (if provided)
+    if cmd.reported_rx_bytes is not None:
+        device["device_reported_received"] = int(cmd.reported_rx_bytes)
+    if cmd.reported_tx_bytes is not None:
+        device["device_reported_sent"] = int(cmd.reported_tx_bytes)
+    if cmd.reported_rx_bytes is not None or cmd.reported_tx_bytes is not None:
+        device["traffic_updated_at"] = time.time()
+    device["last_seen"] = time.time()
+    device["last_seen_at"] = time.time()
+    save_devices_db(db)
+    print(f"📱 Unlock PIN actualizado para: {cmd.device_id}")
     return {"success": True}
 
 @app.delete("/api/device/{device_id}")
@@ -1221,7 +1347,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         "blockGps": config.get("block_gps", True),
                         "blockDateTime": config.get("block_datetime", True),
                         "localPassword": config.get("master_password", "1234"),
-                        "unlockPattern": config.get("unlock_pattern", "012"),
+                        "unlockPattern": config.get("unlock_pattern", "03678"),
                         "blocked": device.get("blocked", False),
                         "apks": apks,
                         "clearDataPassword": clear_pass,

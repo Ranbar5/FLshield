@@ -46,17 +46,11 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 class LockOverlayHelper(
     private val context: Context,
     private val getLocalPassword: () -> String,
-    private val onLocalUnlockSuccess: () -> Unit,
-    private val onUnlockRequested: () -> Unit
+    private val onLocalUnlockSuccess: () -> Unit
 ) {
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private var overlayContainer: FrameLayout? = null
     private var lifecycleOwner: OverlayLifecycleOwner? = null
-
-    // State driven from the service (waiting / granted / denied)
-    var unlockState = mutableStateOf<UnlockState>(UnlockState.Idle)
-
-    enum class UnlockState { Idle, Waiting, Granted, Denied }
 
     fun isShowing(): Boolean = overlayContainer != null && overlayContainer?.isAttachedToWindow == true
 
@@ -83,10 +77,8 @@ class LockOverlayHelper(
             val composeView = ComposeView(context).apply {
                 setContent {
                     LockOverlayScreen(
-                        state = unlockState.value,
                         getLocalPassword = getLocalPassword,
-                        onLocalUnlock = onLocalUnlockSuccess,
-                        onRequestUnlock = onUnlockRequested
+                        onLocalUnlock = onLocalUnlockSuccess
                     )
                 }
             }
@@ -125,7 +117,6 @@ class LockOverlayHelper(
             it.onPause(); it.onStop(); it.onDestroy()
             lifecycleOwner = null
         }
-        unlockState.value = UnlockState.Idle
     }
 }
 
@@ -133,17 +124,11 @@ class LockOverlayHelper(
 
 @Composable
 fun LockOverlayScreen(
-    state: LockOverlayHelper.UnlockState,
     getLocalPassword: () -> String,
-    onLocalUnlock: () -> Unit,
-    onRequestUnlock: () -> Unit
+    onLocalUnlock: () -> Unit
 ) {
     var patternError by remember { mutableStateOf(false) }
     val expectedPassword = getLocalPassword().trim()
-
-    LaunchedEffect(expectedPassword) {
-        android.util.Log.d("LockOverlayScreen", "Expected unlock pattern: $expectedPassword")
-    }
 
     Box(
         modifier = Modifier
@@ -216,72 +201,6 @@ fun LockOverlayScreen(
                     color = Color(0xFFEF4444),
                     fontWeight = FontWeight.SemiBold
                 )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // ── Divider ──────────────────────────────────────────────────
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFF1E293B))
-                Text(
-                    "  o  ",
-                    fontSize = 11.sp,
-                    color = Color(0xFF475569)
-                )
-                HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFF1E293B))
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // ── Remote unlock section ────────────────────────────────────
-            when (state) {
-                LockOverlayHelper.UnlockState.Idle -> {
-                    TextButton(
-                        onClick = onRequestUnlock,
-                    ) {
-                        Text(
-                            "📡  Solicitar desbloqueo remoto",
-                            color = Color(0xFF94A3B8),
-                            fontSize = 13.sp
-                        )
-                    }
-                }
-                LockOverlayHelper.UnlockState.Waiting -> {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        CircularProgressIndicator(
-                            color = Color(0xFF6366F1),
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp
-                        )
-                        Text(
-                            "Esperando aprobación...",
-                            fontSize = 13.sp,
-                            color = Color(0xFF94A3B8)
-                        )
-                    }
-                }
-                LockOverlayHelper.UnlockState.Granted -> {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("✅ ", fontSize = 18.sp)
-                        Text("Acceso concedido", color = Color(0xFF10B981), fontWeight = FontWeight.Bold)
-                    }
-                }
-                LockOverlayHelper.UnlockState.Denied -> {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("🚫 Acceso denegado",
-                            color = Color(0xFFEF4444), fontSize = 13.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        TextButton(onClick = onRequestUnlock) {
-                            Text("Volver a solicitar", color = Color(0xFF94A3B8), fontSize = 12.sp)
-                        }
-                    }
-                }
             }
         }
     }

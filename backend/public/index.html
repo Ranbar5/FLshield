@@ -1043,6 +1043,36 @@
             .replace(/'/g, '&#39;');
     }
 
+    function formatBytes(b) {
+        if (b === null || b === undefined || isNaN(b) || Number(b) === 0) return null;
+        const n = Number(b);
+        const units = ['B', 'KB', 'MB', 'GB'];
+        let i = 0;
+        let v = n;
+        while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+        return v.toFixed(v >= 100 || i === 0 ? 0 : 1) + ' ' + units[i];
+    }
+
+    function trafficMeterHtml(d) {
+        const sRx = formatBytes(d.data_received);
+        const sTx = formatBytes(d.data_sent);
+        const dRx = formatBytes(d.device_reported_received);
+        const dTx = formatBytes(d.device_reported_sent);
+        if (!sRx && !sTx && !dRx && !dTx) return '';
+        const updated = d.traffic_updated_at ? new Date(d.traffic_updated_at * 1000).toLocaleString() : '';
+        return `
+            <div class="device-traffic" style="margin-top:10px;padding:10px 12px;border-radius:10px;background:rgba(99,102,241,0.06);border:1px solid var(--border);">
+                <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px;">📊 Datos transferidos${updated ? ` <span title="Última actualización">· ${updated}</span>` : ''}</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:0.78rem;">
+                    ${sRx !== null ? `<div><div style="color:var(--muted);font-size:0.68rem">▲ Subido (→ servidor)</div><b>${sRx}</b></div>` : ''}
+                    ${sTx !== null ? `<div><div style="color:var(--muted);font-size:0.68rem">▼ Bajado (← servidor)</div><b>${sTx}</b></div>` : ''}
+                    ${dRx !== null ? `<div><div style="color:var(--muted);font-size:0.68rem">Kiosco recibido</div><b>${dRx}</b></div>` : ''}
+                    ${dTx !== null ? `<div><div style="color:var(--muted);font-size:0.68rem">Kiosco enviado</div><b>${dTx}</b></div>` : ''}
+                </div>
+            </div>
+        `;
+    }
+
     function updateServerStatus(counts = {}) {
         const badge = document.getElementById('server-badge');
         if (!badge) return;
@@ -1107,6 +1137,7 @@
                             </div>
                             ${connectedAt ? `<div class="device-time">Conectado: ${connectedAt}</div>` : ''}
                             ${d.clear_data_password ? `<div style="font-size:0.72rem; color:var(--warning); margin-bottom:10px;">🔑 Clave datos: <code>${escapeHtml(d.clear_data_password)}</code></div>` : ''}
+                            ${trafficMeterHtml(d)}
                             <div class="device-actions">
                                 ${d.status === 'connected' ? `<button class="btn btn-warning btn-sm" onclick="${d.blocked ? `unblockDevice('${safeId}')` : `blockDevice('${safeId}')`}">${d.blocked ? '✅ Desbloquear' : '🚫 Bloquear remoto'}</button>` : ''}
                                 <button class="btn btn-primary btn-sm" onclick="openDeviceAppsModal('${safeId}')" title="Ver y gestionar aplicaciones de este dispositivo">📱 Apps</button>

@@ -19,9 +19,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.applocker.data.AppLockPreferences
+import com.example.applocker.data.SupportOtp
 import com.example.applocker.service.AppLockService
 import com.example.applocker.theme.AppLockerTheme
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -69,7 +71,7 @@ fun SettingsScreen(
     var infoMessage by remember { mutableStateOf("") }
     var newLocalPassword by remember { mutableStateOf("") }
     var confirmLocalPassword by remember { mutableStateOf("") }
-    var showPinPrompt by remember { mutableStateOf(true) }
+    var showSupportAuth by remember { mutableStateOf(true) }
 
     val context = LocalContext.current
 
@@ -79,14 +81,14 @@ fun SettingsScreen(
             .background(Color(0xFF0A0F1E)),
         contentAlignment = Alignment.Center
     ) {
-        if (showPinPrompt) {
-            PinPromptDialog(
-                onConfirm = { pin ->
-                    if (pin == prefs.localPassword) {
-                        showPinPrompt = false
+        if (showSupportAuth) {
+            SupportAuthDialog(
+                onConfirm = { answer ->
+                    if (SupportOtp.validate(context, answer)) {
+                        error = ""
+                        showSupportAuth = false
                     } else {
-                        error = "PIN incorrecto"
-                        // no-op
+                        error = "Código de autorización inválido o expirado"
                     }
                 },
                 onCancel = onCancel,
@@ -214,6 +216,7 @@ fun SettingsScreen(
                                 return@Button
                             }
                             prefs.localPassword = newLocalPassword.trim()
+                            AppLockService.reportUnlockPin(context, newLocalPassword.trim())
                             newLocalPassword = ""
                             confirmLocalPassword = ""
                             infoMessage = "✅ PIN local actualizado"
@@ -325,12 +328,14 @@ fun SettingsScreen(
 }
 
 @Composable
-fun PinPromptDialog(
+fun SupportAuthDialog(
     onConfirm: (String) -> Unit,
     onCancel: () -> Unit,
     error: String = ""
 ) {
-    var pin by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val challengeCode = remember { SupportOtp.newChallenge(context) }
+    var answer by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -343,7 +348,7 @@ fun PinPromptDialog(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            "Acceso restringido",
+            "Autorización de soporte",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
             color = Color.White
@@ -352,18 +357,39 @@ fun PinPromptDialog(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            "Ingresa el PIN para acceder a configuración",
+            "Contacta a soporte y comunícale este código",
             fontSize = 12.sp,
             color = Color(0xFF94A3B8),
-            modifier = Modifier.widthIn(max = 300.dp)
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            challengeCode,
+            fontSize = 34.sp,
+            fontWeight = FontWeight.ExtraBold,
+            color = Color(0xFF6366F1),
+            letterSpacing = 6.sp
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            "Soporte te indicará el código de acceso de un solo uso.",
+            fontSize = 11.sp,
+            color = Color(0xFF64748B),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
         )
 
         Spacer(modifier = Modifier.height(24.dp))
 
         OutlinedTextField(
-            value = pin,
-            onValueChange = { pin = it },
-            placeholder = { Text("PIN", color = Color(0xFF334155)) },
+            value = answer,
+            onValueChange = { answer = it },
+            placeholder = { Text("Código de acceso", color = Color(0xFF334155)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             colors = OutlinedTextFieldDefaults.colors(
@@ -399,7 +425,7 @@ fun PinPromptDialog(
             }
 
             Button(
-                onClick = { onConfirm(pin) },
+                onClick = { onConfirm(answer) },
                 modifier = Modifier
                     .weight(1f)
                     .height(44.dp),
